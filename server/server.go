@@ -1,7 +1,12 @@
 package server
 
 import (
+	"context"
+	"time"
+
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/scriptlanguage"
 	"github.com/rs/zerolog"
 	"github.com/wintbiit/gacloud/config"
 	"github.com/wintbiit/gacloud/model"
@@ -11,11 +16,13 @@ import (
 
 type GaCloudServer struct {
 	db          *gorm.DB
-	es          *elasticsearch.Client
+	es          *elasticsearch.TypedClient
 	logger      *zerolog.Logger
 	Info        *model.AppInfo
 	Maintenance bool
 }
+
+const elasticSearchIndex = "gacloud.files.v1"
 
 func NewLocalGaCloudServer() (*GaCloudServer, error) {
 	dbType, ok := config.Get("db.type")
@@ -41,6 +48,42 @@ func NewLocalGaCloudServer() (*GaCloudServer, error) {
 		return nil, err
 	}
 
+	esHost, ok := config.Get("es.host")
+	if !ok {
+		return nil, utils.ErrorSetupNotCompleted
+	}
+
+	esUser, ok := config.Get("es.user")
+	if !ok {
+		return nil, utils.ErrorSetupNotCompleted
+	}
+
+	esPassword, ok := config.Get("es.password")
+	if !ok {
+		return nil, utils.ErrorSetupNotCompleted
+	}
+
+	es, err := utils.OpenElasticSearch(esHost, esUser, esPassword, elasticSearchIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err := es.PutScript(listFileScriptId).Script(&types.StoredScript{
+		Lang: scriptlanguage.ScriptLanguage{
+			Name: "painless",
+		},
+		Source: listFileScript,
+	}).Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !resp.Acknowledged {
+		return nil, utils.ErrorElasticSearchScriptNotAcknowledged
+	}
+
 	serverLogger := utils.NewLogger("server")
 	serverInfo := &model.AppInfo{
 		SiteName:    config.GetWithDefault("site.name", "GaCloud"),
@@ -50,6 +93,7 @@ func NewLocalGaCloudServer() (*GaCloudServer, error) {
 
 	return &GaCloudServer{
 		db:     db,
+		es:     es,
 		logger: &serverLogger,
 		Info:   serverInfo,
 	}, nil

@@ -23,7 +23,7 @@ type localFileProvider struct {
 	localFileProviderConfig
 }
 
-func (l *localFileProvider) Get(ctx context.Context, fileSum string) (io.Reader, bool, error) {
+func (l *localFileProvider) Get(ctx context.Context, fileSum string) (io.ReadCloser, bool, error) {
 	if len(fileSum) < 4 {
 		return nil, false, nil
 	}
@@ -40,7 +40,7 @@ func (l *localFileProvider) Get(ctx context.Context, fileSum string) (io.Reader,
 	return f, true, nil
 }
 
-func (l *localFileProvider) Put(ctx context.Context, fileSum string) (io.Writer, error) {
+func (l *localFileProvider) Put(ctx context.Context, fileSum string) (io.WriteCloser, error) {
 	if len(fileSum) < 4 {
 		return nil, nil
 	}

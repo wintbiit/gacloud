@@ -82,24 +82,24 @@ type gormLogger struct {
 	level gormlog.LogLevel
 }
 
-func (g gormLogger) LogMode(level gormlog.LogLevel) gormlog.Interface {
+func (g *gormLogger) LogMode(level gormlog.LogLevel) gormlog.Interface {
 	g.level = level
 	return g
 }
 
-func (g gormLogger) Info(ctx context.Context, s string, i ...interface{}) {
+func (g *gormLogger) Info(ctx context.Context, s string, i ...interface{}) {
 	g.Logger.Info().Ctx(ctx).Msgf(s, i...)
 }
 
-func (g gormLogger) Warn(ctx context.Context, s string, i ...interface{}) {
+func (g *gormLogger) Warn(ctx context.Context, s string, i ...interface{}) {
 	g.Logger.Warn().Ctx(ctx).Msgf(s, i...)
 }
 
-func (g gormLogger) Error(ctx context.Context, s string, i ...interface{}) {
+func (g *gormLogger) Error(ctx context.Context, s string, i ...interface{}) {
 	g.Logger.Error().Ctx(ctx).Msgf(s, i...)
 }
 
-func (g gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+func (g *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	elapsed := time.Since(begin)
 	switch {
 	case err != nil:
@@ -128,5 +128,5 @@ func NewGormLogger() gormlog.Interface {
 	if DEBUG {
 		level = gormlog.Info
 	}
-	return gormLogger{Logger: &logger, level: level}
+	return &gormLogger{Logger: &logger, level: level}
 }

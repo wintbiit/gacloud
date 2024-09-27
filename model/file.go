@@ -17,7 +17,6 @@ type ListFile struct {
 }
 
 type File struct {
-	gorm.Model
 	ListFile
 	Sum        string `gorm:"unique,not null,index" json:"sum"`
 	ProviderId int64  `gorm:"not null" json:"provider_id"`

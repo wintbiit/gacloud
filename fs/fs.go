@@ -6,8 +6,8 @@ import (
 )
 
 type FileProvider interface {
-	Get(ctx context.Context, fileSum string) (io.Reader, bool, error)
-	Put(ctx context.Context, fileSum string) (io.Writer, error)
+	Get(ctx context.Context, fileSum string) (io.ReadCloser, bool, error)
+	Put(ctx context.Context, fileSum string) (io.WriteCloser, error)
 	Delete(ctx context.Context, fileSum string) error
 	Exists(ctx context.Context, fileSum string) (bool, error)
 }
