@@ -1,13 +1,15 @@
 package model
 
+import "gorm.io/gorm"
+
 type Group struct {
-	Name        string `xorm:"varchar(25) notnull unique 'name'"`
-	DisplayName string `xorm:"varchar(25) notnull 'display_name'"`
-	TimeModel
+	gorm.Model
+	Name        string `gorm:"unique,not null"`
+	DisplayName string `gorm:"not null"`
 }
 
 type UserGroup struct {
-	UserId  int64 `xorm:"varchar(36) notnull"`
-	GroupId int64 `xorm:"varchar(36) notnull"`
-	TimeModel
+	gorm.Model
+	User  *User  `gorm:"foreignKey:UserID"`
+	Group *Group `gorm:"foreignKey:GroupID"`
 }

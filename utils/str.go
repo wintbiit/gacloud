@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+
 	"github.com/rs/zerolog/log"
 )
 

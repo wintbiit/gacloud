@@ -2,22 +2,26 @@ package routes
 
 import (
 	"github.com/kataras/iris/v12"
-	"github.com/wintbiit/gacloud/internal"
+	"github.com/wintbiit/gacloud/server"
+	"github.com/wintbiit/gacloud/utils"
 )
 
 func init() {
-	addHook("/", false, func(app iris.Party) {
-		app.Get("/health", Healthz)
+	addHookFront("/api/v1", func(app iris.Party) {
+		app.Get("/health", Health)
+		app.Get("/serverinfo", ServerInfo)
 	})
 }
 
-func Healthz(ctx iris.Context) {
-	if internal.GetGaCloudServer() == nil || !internal.GetGaCloudServer().HealthCheck() {
+func Health(ctx iris.Context) {
+	if server.GetServer() == nil {
 		ctx.StatusCode(iris.StatusInternalServerError)
-		ctx.WriteString("Database connection failed")
 		return
 	}
 
 	ctx.StatusCode(iris.StatusOK)
-	ctx.WriteString("OK")
+}
+
+func ServerInfo(ctx iris.Context) {
+	ctx.JSON(utils.ServerInfo)
 }

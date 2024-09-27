@@ -2,31 +2,15 @@ package routes
 
 import (
 	"github.com/kataras/iris/v12"
-	"github.com/wintbiit/gacloud/config"
+	"github.com/wintbiit/gacloud/server"
 )
 
 func init() {
-	addHook("/", true, func(app iris.Party) {
-		app.Get("/info", GetAppInfo)
+	addHook("/api/v1", func(app iris.Party) {
+		app.Get("/appinfo", AppInfo)
 	})
 }
 
-type AppInfo struct {
-	SiteName    string `json:"site_name"`
-	ExternalUrl string `json:"external_url"`
-	SiteIcon    string `json:"site_icon"`
-}
-
-var appInfo *AppInfo
-
-func GetAppInfo(ctx iris.Context) {
-	if appInfo == nil {
-		appInfo = &AppInfo{
-			SiteName:    config.GetWithDefault("app.name", "GaCloud"),
-			ExternalUrl: config.GetWithDefault("app.external_url", "http://localhost:8080"),
-			SiteIcon:    config.GetWithDefault("app.icon", ""),
-		}
-	}
-
-	ctx.JSON(appInfo)
+func AppInfo(ctx iris.Context) {
+	ctx.JSON(server.GetServer().Info)
 }

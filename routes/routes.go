@@ -2,8 +2,7 @@ package routes
 
 import (
 	"github.com/kataras/iris/v12"
-	"github.com/wintbiit/gacloud/internal"
-	"time"
+	"github.com/wintbiit/gacloud/server"
 )
 
 type registry struct {
@@ -14,32 +13,36 @@ type registry struct {
 
 var hooks = make([]registry, 0)
 
-func addHook(party string, behind bool, cb func(iris.Party)) {
-	hooks = append(hooks, registry{party, cb, behind})
+func addHook(party string, cb func(iris.Party)) {
+	hooks = append(hooks, registry{party, cb, true})
+}
+
+func addHookFront(party string, cb func(iris.Party)) {
+	hooks = append(hooks, registry{party, cb, false})
 }
 
 func RegisterRoutes(app iris.Party) {
 	for _, hook := range hooks {
 		party := app.Party(hook.party)
-		party.Use(coreFunction())
+		if hook.behind {
+			party.Use(coreCheck())
+		}
 		hook.cb(party)
 	}
 }
 
-func coreFunction() iris.Handler {
-	lastCheckedTime := time.Now()
-	lastCheckPass := false
-
+func coreCheck() iris.Handler {
 	return func(ctx iris.Context) {
-		if !lastCheckPass && time.Since(lastCheckedTime) > 30*time.Second {
-			checkPass := internal.GetGaCloudServer() != nil && internal.GetGaCloudServer().HealthCheck()
-			lastCheckPass = checkPass
-			lastCheckedTime = time.Now()
+		if server.GetServer() == nil {
+			ctx.StatusCode(iris.StatusSiteFrozen)
+			ctx.WriteString("server not ready")
+			ctx.StopExecution()
+			return
 		}
 
-		if !lastCheckPass {
-			ctx.StatusCode(iris.StatusInternalServerError)
-			ctx.WriteString("server not ready")
+		if server.GetServer().Maintenance {
+			ctx.StatusCode(iris.StatusServiceUnavailable)
+			ctx.WriteString("server maintenance")
 			ctx.StopExecution()
 			return
 		}

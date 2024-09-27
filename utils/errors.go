@@ -6,5 +6,8 @@ func (e Error) Error() string {
 	return string(e)
 }
 
-var ErrorFileNotFound Error = "file not found"
-var ErrorFileProviderNotFound Error = "file provider not found"
+var (
+	ErrorSetupNotCompleted    Error = "setup not completed"
+	ErrorFileNotFound         Error = "file not found"
+	ErrorFileProviderNotFound Error = "file provider not found"
+)

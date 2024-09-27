@@ -1,22 +1,31 @@
 package model
 
-const FileOwnerTypeUser = "user"
-const FileOwnerTypeGroup = "group"
-const FileOwnerTypeShared = "shared"
+import "gorm.io/gorm"
+
+const (
+	FileOwnerTypeUser   = 0
+	FileOwnerTypeGroup  = 1
+	FileOwnerTypeShared = 2
+)
+
+type ListFile struct {
+	Path      string `json:"path" gorm:"unique,not null,index"`
+	Size      int64  `json:"size" gorm:"not null"`
+	Mime      string `json:"mime" gorm:"not null"`
+	OwnerType int8   `json:"owner_type" gorm:"not null"`
+	OwnerId   uint   `json:"owner_id" gorm:"not null"`
+}
 
 type File struct {
-	Path       string `xorm:"varchar(255) notnull"`
-	Size       int64  `xorm:"notnull"`
-	Sum        string `xorm:"varchar(64) notnull"`
-	Mime       string `xorm:"varchar(255) notnull"`
-	ProviderId int64  `xorm:"notnull"`
-	TimeModel
-	OwnerModel
+	gorm.Model
+	ListFile
+	Sum        string `gorm:"unique,not null,index" json:"sum"`
+	ProviderId int64  `gorm:"not null" json:"provider_id"`
 }
 
 type FileProvider struct {
-	Name       string `xorm:"varchar(255) notnull"`
-	Type       string `xorm:"varchar(255) notnull"`
-	Credential string `xorm:"json notnull"`
-	TimeModel
+	gorm.Model
+	Name       string `gorm:"unique"`
+	Type       string `gorm:"not null"`
+	Credential string `gorm:"not null"`
 }

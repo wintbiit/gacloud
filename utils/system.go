@@ -1,15 +1,31 @@
 package utils
 
 import (
-	"github.com/rs/zerolog/log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"syscall"
+
+	"github.com/rs/zerolog/log"
 )
 
-var Version = "v0.0.1"
+type ServerInformation struct {
+	Version       string `json:"version"`
+	BuildRevision string `json:"build_revision"`
+	BuildTime     string `json:"build_time"`
+	GoVersion     string `json:"go_version"`
+	DataDir       string `json:"-"`
+	LogDir        string `json:"-"`
+	Addr          string `json:"addr"`
+}
 
-var shutdownHooks []func()
+var (
+	shutdownHooks []func()
+	version       = "unknown"
+	ServerInfo    *ServerInformation
+)
 
 func init() {
 	shutdownHooks = make([]func(), 0)
@@ -24,9 +40,41 @@ func init() {
 			hook()
 		}
 	}()
-}
 
-func GetVersion() {
+	dataDir := GetEnv("GACLOUD_DATA_DIR", "./")
+	logDir := GetEnv("GACLOUD_LOG_DIR", "./logs")
+
+	// to abs path
+	dataDir, _ = filepath.Abs(dataDir)
+	logDir, _ = filepath.Abs(logDir)
+
+	os.MkdirAll(dataDir, 0o755)
+	os.MkdirAll(logDir, 0o755)
+
+	ServerInfo = &ServerInformation{
+		Version:   version,
+		GoVersion: runtime.Version(),
+		DataDir:   dataDir,
+		LogDir:    logDir,
+		Addr:      GetEnv("GACLOUD_ADDR", ":8080"),
+	}
+
+	buildInfo, ok := debug.ReadBuildInfo()
+	if ok {
+		for _, setting := range buildInfo.Settings {
+			if version != "" {
+				break
+			}
+
+			if setting.Key == "vcs.revision" {
+				ServerInfo.BuildRevision = setting.Value[0:7]
+			}
+
+			if setting.Key == "vcs.time" {
+				ServerInfo.BuildTime = setting.Value
+			}
+		}
+	}
 }
 
 func AddShutdownHook(hook func()) {

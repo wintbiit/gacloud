@@ -2,56 +2,67 @@ package config
 
 import (
 	"context"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog/log"
-	"github.com/wintbiit/gacloud/model"
+	"os"
+	"path"
 	"strconv"
+	"sync"
 	"time"
-	"xorm.io/xorm"
-	"xorm.io/xorm/caches"
+
+	"github.com/glebarez/sqlite"
+	"github.com/rs/zerolog/log"
+	"github.com/wintbiit/gacloud/utils"
+	"gorm.io/gorm"
 )
 
 type config struct {
-	Id    int64  `xorm:"pk autoincr"`
-	Key   string `xorm:"unique,index"`
-	Value string `xorm:"text"`
-	model.TimeModel
+	Key   string `gorm:"primaryKey,unique,not null,index"`
+	Value string `gorm:"not null"`
+	gorm.Model
 }
 
-var engine *xorm.Engine
+var (
+	engine  *gorm.DB
+	cfgPool = sync.Pool{
+		New: func() interface{} {
+			return new(config)
+		},
+	}
+)
 
 func init() {
 	var err error
-	engine, err = xorm.NewEngine("sqlite3", "./gacloud.config.db")
+	dir := path.Join(utils.ServerInfo.DataDir, "config")
+	os.MkdirAll(dir, 0o755)
+	engine, err = gorm.Open(sqlite.Open(path.Join(dir, "gacloud.config.db")), &gorm.Config{})
 	if err != nil {
 		log.Panic().Err(err).Msg("failed to load config database. Please check ./gacloud.config.db")
 	}
-
-	cache := caches.NewLRUCacher2(caches.NewMemoryStore(), 30*time.Second, 1000)
-	engine.SetDefaultCacher(cache)
+	engine.Logger = utils.NewGormLogger()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err = engine.PingContext(ctx); err != nil {
-		log.Panic().Err(err).Msg("failed to connect to config database")
-	}
-
-	if err = engine.Sync2(new(config)); err != nil {
-		log.Panic().Err(err).Msg("failed to sync config database")
+	err = engine.WithContext(ctx).AutoMigrate(&config{})
+	if err != nil {
+		log.Panic().Err(err).Msg("failed to migrate config database")
 	}
 
 	log.Info().Msg("config database is ready")
 }
 
 func Get(key string) (string, bool) {
-	var c config
-	has, err := engine.Where("key = ?", key).Get(&c)
-	if err != nil {
-		log.Error().Err(err).Str("key", key).Msg("failed to get config")
+	c := cfgPool.Get().(*config)
+	defer func() {
+		c.ID = 0
+		cfgPool.Put(c)
+	}()
+
+	engine.Where("key = ?", key).First(c)
+	if c.ID == 0 {
+		return "", false
 	}
 
-	return c.Value, has
+	return c.Value, true
 }
 
 func GetWithDefault(key, defaultValue string) string {
@@ -69,14 +80,15 @@ func Set(key, value string) {
 		Value: value,
 	}
 
-	_, err := engine.Insert(c)
+	// insert or update
+	err := engine.Where("key = ?", key).Assign(c).FirstOrCreate(&c).Error
 	if err != nil {
 		log.Error().Err(err).Str("key", key).Str("value", value).Msg("failed to set config")
 	}
 }
 
 func Delete(key string) {
-	_, err := engine.Where("key = ?", key).Delete(new(config))
+	err := engine.Where("key = ?", key).Delete(&config{}).Error
 	if err != nil {
 		log.Error().Err(err).Str("key", key).Msg("failed to delete config")
 	}
@@ -148,10 +160,22 @@ func MustGet(key string) string {
 }
 
 func GetAll(prefix string) map[string]string {
-	var cs []config
-	err := engine.Where("key like ?", prefix+"%").Find(&cs)
+	rows, err := engine.Where("key like ?", prefix+"%").Rows()
 	if err != nil {
 		log.Error().Err(err).Str("prefix", prefix).Msg("failed to get all config")
+	}
+
+	defer rows.Close()
+	cs := make([]config, 0)
+	for rows.Next() {
+		c := cfgPool.Get().(*config)
+		err = engine.ScanRows(rows, c)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to scan config")
+			continue
+		}
+
+		cs = append(cs, *c)
 	}
 
 	m := make(map[string]string)

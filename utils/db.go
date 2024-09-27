@@ -1,6 +1,26 @@
 package utils
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+func OpenDB(dbType, dsn string) (*gorm.DB, error) {
+	switch dbType {
+	case "mysql":
+		return gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	case "postgres":
+		return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	case "sqlite":
+		return gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	default:
+		return nil, fmt.Errorf("unsupported db type")
+	}
+}
 
 func ParseDb(dbType string, params map[string]interface{}) string {
 	switch dbType {

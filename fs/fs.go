@@ -14,8 +14,10 @@ type FileProvider interface {
 
 type FileProviderFactory func([]byte) (FileProvider, error)
 
-var fileProviderFactories = make(map[string]FileProviderFactory)
-var fileProviderConfigs = make(map[string]interface{})
+var (
+	fileProviderFactories = make(map[string]FileProviderFactory)
+	fileProviderConfigs   = make(map[string]interface{})
+)
 
 func RegisterFileProvider(name string, factory FileProviderFactory, config interface{}) {
 	fileProviderFactories[name] = factory

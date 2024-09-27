@@ -1,15 +1,32 @@
 package model
 
-import "time"
+import "gorm.io/gorm"
 
-type TimeModel struct {
-	ID        int64      `xorm:"pk autoincr"`
-	CreatedAt time.Time  `xorm:"created"`
-	UpdatedAt time.Time  `xorm:"updated"`
-	DeleteAt  *time.Time `xorm:"deleted"`
-}
+func MigrateModels(db *gorm.DB) error {
+	err := db.AutoMigrate(&File{})
+	if err != nil {
+		return err
+	}
 
-type OwnerModel struct {
-	OwnerId   int64  `xorm:"varchar(36) notnull"`
-	OwnerType string `xorm:"varchar(36) notnull"`
+	err = db.AutoMigrate(&FileProvider{})
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(&Group{})
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(&UserGroup{})
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(&User{})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -1,22 +1,27 @@
 package utils
 
 import (
-	"github.com/kataras/iris/v12"
+	"context"
 	"os"
 	"strconv"
 	"time"
-	xormlog "xorm.io/xorm/log"
+
+	"github.com/kataras/iris/v12"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/natefinch/lumberjack.v2"
+	gormlog "gorm.io/gorm/logger"
 )
 
-var DEBUG = os.Getenv("GACLOUD_DEBUG") == "true"
+var (
+	DEBUG  = os.Getenv("GACLOUD_DEBUG") == "true"
+	logDir = GetEnv("GACLOUD_LOG_DIR", "./logs")
+)
 
 func init() {
 	lumberjackLogger := lumberjack.Logger{
-		Filename:   "logs/auther.log",
+		Filename:   logDir + "/gacloud.log",
 		MaxSize:    10, // megabytes
 		MaxBackups: 10,
 		MaxAge:     28, // days
@@ -37,8 +42,12 @@ func init() {
 	log.Info().Msg("Logger initialized")
 }
 
+func NewLogger(framework string) zerolog.Logger {
+	return log.With().Str("framework", framework).Logger()
+}
+
 func NewIrisLogger() iris.Handler {
-	logger := log.Logger.With().Str("framework", "iris").Logger()
+	logger := NewLogger("iris")
 
 	return func(ctx iris.Context) {
 		var status, ip, method, path string
@@ -62,79 +71,62 @@ func NewIrisLogger() iris.Handler {
 			Str("method", method).
 			Str("path", path).
 			Str("status", status).
-			Dur("latency", latency).
-			Msg("request finished")
+			Stringer("latency", latency).
+			Str("user_id", ctx.Values().GetString("user_id")).
+			Send()
 	}
 }
 
-type xormLogger struct {
+type gormLogger struct {
 	*zerolog.Logger
-	level   xormlog.LogLevel
-	showSQL bool
+	level gormlog.LogLevel
 }
 
-func (x xormLogger) Debug(v ...interface{}) {
-	x.Logger.Debug().Msg("xorm debug")
+func (g gormLogger) LogMode(level gormlog.LogLevel) gormlog.Interface {
+	g.level = level
+	return g
 }
 
-func (x xormLogger) Debugf(format string, v ...interface{}) {
-	x.Logger.Debug().Msgf(format, v...)
+func (g gormLogger) Info(ctx context.Context, s string, i ...interface{}) {
+	g.Logger.Info().Ctx(ctx).Msgf(s, i...)
 }
 
-func (x xormLogger) Error(v ...interface{}) {
-	x.Logger.Error().Msg("xorm error")
+func (g gormLogger) Warn(ctx context.Context, s string, i ...interface{}) {
+	g.Logger.Warn().Ctx(ctx).Msgf(s, i...)
 }
 
-func (x xormLogger) Errorf(format string, v ...interface{}) {
-	x.Logger.Error().Msgf(format, v...)
+func (g gormLogger) Error(ctx context.Context, s string, i ...interface{}) {
+	g.Logger.Error().Ctx(ctx).Msgf(s, i...)
 }
 
-func (x xormLogger) Info(v ...interface{}) {
-	x.Logger.Info().Msg("xorm info")
-}
-
-func (x xormLogger) Infof(format string, v ...interface{}) {
-	x.Logger.Info().Msgf(format, v...)
-}
-
-func (x xormLogger) Warn(v ...interface{}) {
-	x.Logger.Warn().Msg("xorm warn")
-}
-
-func (x xormLogger) Warnf(format string, v ...interface{}) {
-	x.Logger.Warn().Msgf(format, v...)
-}
-
-func (x xormLogger) Level() xormlog.LogLevel {
-	return x.level
-}
-
-func (x xormLogger) SetLevel(l xormlog.LogLevel) {
-	x.level = l
-}
-
-func (x xormLogger) ShowSQL(show ...bool) {
-	if len(show) > 0 {
-		x.showSQL = show[0]
+func (g gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+	elapsed := time.Since(begin)
+	switch {
+	case err != nil:
+		sql, rows := fc()
+		g.Logger.Error().
+			Ctx(ctx).
+			Str("sql", sql).
+			Int64("rows", rows).
+			Err(err).
+			Dur("elapsed", elapsed).
+			Send()
+	default:
+		sql, rows := fc()
+		g.Logger.Debug().
+			Ctx(ctx).
+			Str("sql", sql).
+			Int64("rows", rows).
+			Dur("elapsed", elapsed).
+			Send()
 	}
 }
 
-func (x xormLogger) IsShowSQL() bool {
-	return x.showSQL
-}
-
-func NewXormLogger() xormlog.Logger {
-	logger := log.Logger.With().Str("framework", "xorm").Logger()
-	level := xormlog.LOG_INFO
+func NewGormLogger() gormlog.Interface {
+	logger := NewLogger("gorm")
+	level := gormlog.Warn
 	if DEBUG {
-		level = xormlog.LOG_DEBUG
+		level = gormlog.Info
 	}
-
-	showSql := DEBUG
-
-	return &xormLogger{
-		Logger:  &logger,
-		level:   level,
-		showSQL: showSql,
-	}
+	return gormLogger{Logger: &logger, level: level}
 }
