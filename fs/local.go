@@ -12,15 +12,15 @@ import (
 const localFileProviderName = "local"
 
 func init() {
-	RegisterFileProvider(localFileProviderName, newLocalFileProvider, localFileProviderConfig{})
+	RegisterFileProvider(localFileProviderName, NewLocalFileProvider, LocalFileProviderConfig{})
 }
 
-type localFileProviderConfig struct {
+type LocalFileProviderConfig struct {
 	MountDir string `json:"mount_dir"`
 }
 
 type localFileProvider struct {
-	localFileProviderConfig
+	LocalFileProviderConfig
 }
 
 func (l *localFileProvider) Get(ctx context.Context, fileSum string) (io.ReadCloser, bool, error) {
@@ -40,22 +40,37 @@ func (l *localFileProvider) Get(ctx context.Context, fileSum string) (io.ReadClo
 	return f, true, nil
 }
 
-func (l *localFileProvider) Put(ctx context.Context, fileSum string) (io.WriteCloser, error) {
+func (l *localFileProvider) Put(ctx context.Context, fileSum string, reader io.Reader) error {
 	if len(fileSum) < 4 {
-		return nil, nil
+		return nil
 	}
 
 	p := path.Join(l.MountDir, fileSum[:2], fileSum[2:4], fileSum)
 	if err := os.MkdirAll(path.Dir(p), 0o755); err != nil {
-		return nil, err
+		return err
+	}
+
+	// if file exists, not dir and size > 0, regard as already exists, return nil
+	stat, err := os.Stat(p)
+	if err == nil && !stat.IsDir() && stat.Size() > 0 {
+		return nil
+	}
+
+	if err == nil && stat.IsDir() {
+		return os.ErrExist
 	}
 
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	defer f.Close()
+
+	if _, err = io.Copy(f, reader); err != nil {
+		return err
 	}
 
-	return f, nil
+	return nil
 }
 
 func (l *localFileProvider) Delete(ctx context.Context, fileSum string) error {
@@ -87,11 +102,15 @@ func (l *localFileProvider) Exists(ctx context.Context, fileSum string) (bool, e
 	return true, nil
 }
 
-func newLocalFileProvider(config []byte) (FileProvider, error) {
-	var cfg localFileProviderConfig
+func NewLocalFileProvider(config []byte) (FileProvider, error) {
+	var cfg LocalFileProviderConfig
 	if err := json.Unmarshal(config, &cfg); err != nil {
 		return nil, err
 	}
 
-	return &localFileProvider{cfg}, nil
+	return NewLocalFileProviderWithConfig(cfg), nil
+}
+
+func NewLocalFileProviderWithConfig(cfg LocalFileProviderConfig) FileProvider {
+	return &localFileProvider{cfg}
 }

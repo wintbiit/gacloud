@@ -7,7 +7,7 @@ import (
 
 type FileProvider interface {
 	Get(ctx context.Context, fileSum string) (io.ReadCloser, bool, error)
-	Put(ctx context.Context, fileSum string) (io.WriteCloser, error)
+	Put(ctx context.Context, fileSum string, reader io.Reader) error
 	Delete(ctx context.Context, fileSum string) error
 	Exists(ctx context.Context, fileSum string) (bool, error)
 }
@@ -22,4 +22,8 @@ var (
 func RegisterFileProvider(name string, factory FileProviderFactory, config interface{}) {
 	fileProviderFactories[name] = factory
 	fileProviderConfigs[name] = config
+}
+
+func GetFileProviderFactory(name string) FileProviderFactory {
+	return fileProviderFactories[name]
 }

@@ -11,21 +11,41 @@ func (s *GaCloudServer) IsUserInGroup(ctx context.Context, user *model.User, gro
 	return count > 0
 }
 
-func (s *GaCloudServer) UserAddGroup(ctx context.Context, user *model.User, group *model.Group) {
+func (s *GaCloudServer) UserAddGroup(ctx context.Context, user *model.User, group *model.Group) error {
 	ug := &model.UserGroup{
-		User:  user,
-		Group: group,
+		User:  *user,
+		Group: *group,
 	}
 
 	if err := s.db.WithContext(ctx).Create(ug).Error; err != nil {
-		s.logger.Err(err).Msg("add user group failed")
-		return
+		return err
 	}
+
+	return nil
 }
 
-func (s *GaCloudServer) UserRemoveGroup(ctx context.Context, user *model.User, group *model.Group) {
+func (s *GaCloudServer) UserRemoveGroup(ctx context.Context, user *model.User, group *model.Group) error {
 	if err := s.db.WithContext(ctx).Where("user_id = ? AND group_id = ?", user.ID, group.ID).Delete(&model.UserGroup{}).Error; err != nil {
-		s.logger.Err(err).Msg("remove user group failed")
-		return
+		return err
 	}
+
+	return nil
+}
+
+func (s *GaCloudServer) GetUserGroupIds(ctx context.Context, user *model.User) []uint {
+	var userGroups []*model.UserGroup
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ?", user.ID).
+		Select("group_id").
+		Find(&userGroups).Error; err != nil {
+		s.logger.Err(err).Msg("get user groups failed")
+		return nil
+	}
+
+	var groupIds []uint
+	for _, ug := range userGroups {
+		groupIds = append(groupIds, ug.GroupID)
+	}
+
+	return groupIds
 }

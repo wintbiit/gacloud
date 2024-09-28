@@ -11,7 +11,7 @@ import (
 func TestEsConn(t *testing.T) {
 	t.Log("TestEsConn")
 
-	c, err := utils.OpenElasticSearch("http://172.30.162.53:9200", "elastic", "RobotLab2024", "test")
+	c, err := utils.OpenElasticSearch("http://172.30.162.53:9200", "elastic", "RobotLab2024")
 	if err != nil {
 		t.Error(err)
 		return

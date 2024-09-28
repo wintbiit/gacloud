@@ -10,6 +10,8 @@ type Group struct {
 
 type UserGroup struct {
 	gorm.Model
-	User  *User  `gorm:"foreignKey:UserID"`
-	Group *Group `gorm:"foreignKey:GroupID"`
+	User    User `gorm:"foreignKey:UserID"`
+	UserID  uint
+	Group   Group `gorm:"foreignKey:GroupID"`
+	GroupID uint
 }

@@ -8,18 +8,15 @@ const (
 	FileOwnerTypeShared = 2
 )
 
-type ListFile struct {
-	Path      string `json:"path" gorm:"unique,not null,index"`
-	Size      int64  `json:"size" gorm:"not null"`
-	Mime      string `json:"mime" gorm:"not null"`
-	OwnerType int8   `json:"owner_type" gorm:"not null"`
-	OwnerId   uint   `json:"owner_id" gorm:"not null"`
-}
-
 type File struct {
-	ListFile
+	Path       string `json:"path" gorm:"unique,not null,index"`
+	Size       int64  `json:"size" gorm:"not null"`
+	Mime       string `json:"mime" gorm:"not null"`
+	OwnerType  int8   `json:"owner_type" gorm:"not null"`
+	OwnerId    uint   `json:"owner_id" gorm:"not null"`
 	Sum        string `gorm:"unique,not null,index" json:"sum"`
-	ProviderId int64  `gorm:"not null" json:"provider_id"`
+	ProviderId uint   `gorm:"not null" json:"provider_id"`
+	Fd         string `gorm:"-" json:"fd"`
 }
 
 type FileProvider struct {

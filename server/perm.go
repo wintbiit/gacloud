@@ -19,7 +19,10 @@ func (s *GaCloudServer) AuthorizeFileAction(ctx context.Context, user *model.Use
 	case model.FileOwnerTypeGroup:
 		return s.IsUserInGroup(ctx, user, file.OwnerId)
 	default:
-		s.logger.Error().Uint("fileId", file.ID).Int8("ownerType", file.OwnerType).Msg("Unknown file owner type")
+		s.logger.Error().Str("sum", file.Sum).
+			Int8("ownerType", file.OwnerType).
+			Uint("ownerId", file.OwnerId).
+			Msg("Unknown file owner type")
 		return false
 	}
 }
