@@ -1,6 +1,10 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"path"
+
+	"gorm.io/gorm"
+)
 
 type User struct {
 	gorm.Model
@@ -8,4 +12,8 @@ type User struct {
 	DisplayName string `gorm:"not null"`
 	Email       string `gorm:"unique,not null"`
 	Password    string `gorm:"not null"`
+}
+
+func (u *User) HomeDir() string {
+	return path.Join(UserScopeDir, u.Name)
 }

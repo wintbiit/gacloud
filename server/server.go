@@ -7,7 +7,6 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/scriptlanguage"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wintbiit/gacloud/config"
@@ -38,17 +37,20 @@ func init() {
 }
 
 func NewLocalGaCloudServer() (*GaCloudServer, error) {
-	db, err := setupDb()
+	setupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	db, err := setupDb(setupCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	es, err := setupElasticSearch()
+	es, err := setupElasticSearch(setupCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	providers, err := setupFileProviders(db)
+	providers, err := setupFileProviders(setupCtx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +90,7 @@ func GetServer() *GaCloudServer {
 	return s
 }
 
-func setupDb() (*gorm.DB, error) {
+func setupDb(ctx context.Context) (*gorm.DB, error) {
 	dbType, ok := config.Get("db.type")
 	if !ok {
 		return nil, utils.ErrorSetupNotCompleted
@@ -107,7 +109,7 @@ func setupDb() (*gorm.DB, error) {
 	logger := utils.NewGormLogger()
 	db.Logger = logger
 
-	err = model.MigrateModels(db)
+	err = model.MigrateModels(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +117,7 @@ func setupDb() (*gorm.DB, error) {
 	return db, nil
 }
 
-func setupElasticSearch() (*elasticsearch.TypedClient, error) {
+func setupElasticSearch(ctx context.Context) (*elasticsearch.TypedClient, error) {
 	esHost, ok := config.Get("es.host")
 	if !ok {
 		return nil, utils.ErrorSetupNotCompleted
@@ -132,19 +134,6 @@ func setupElasticSearch() (*elasticsearch.TypedClient, error) {
 	}
 
 	es, err := utils.OpenElasticSearch(esHost, esUser, esPassword)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err = es.PutScript(permissionScriptId).Script(&types.StoredScript{
-		Lang: scriptlanguage.ScriptLanguage{
-			Name: "painless",
-		},
-		Source: permissionScript,
-	}).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -167,16 +156,17 @@ func setupElasticSearch() (*elasticsearch.TypedClient, error) {
 	return es, nil
 }
 
-func setupFileProviders(db *gorm.DB) (map[uint]fs.FileProvider, error) {
+func setupFileProviders(ctx context.Context, db *gorm.DB) (map[uint]fs.FileProvider, error) {
 	providers := make(map[uint]fs.FileProvider)
 
 	var fileProviders []model.FileProvider
-	err := db.Find(&fileProviders).Error
+
+	err := db.WithContext(ctx).Find(&fileProviders).Error
 	if err != nil {
 		return nil, err
 	}
 
-	providers[0] = fs.NewLocalFileProviderWithConfig(fs.LocalFileProviderConfig{
+	providers[DefaultFileProviderId] = fs.NewLocalFileProviderWithConfig(fs.LocalFileProviderConfig{
 		MountDir: path.Join(utils.ServerInfo.DataDir, "files"),
 	})
 
@@ -197,14 +187,4 @@ func setupFileProviders(db *gorm.DB) (map[uint]fs.FileProvider, error) {
 	}
 
 	return providers, nil
-}
-
-func (s *GaCloudServer) RefreshFileProvider() error {
-	providers, err := setupFileProviders(s.db)
-	if err != nil {
-		return err
-	}
-
-	s.fileProviders = providers
-	return nil
 }

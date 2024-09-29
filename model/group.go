@@ -1,6 +1,10 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"path"
+
+	"gorm.io/gorm"
+)
 
 type Group struct {
 	gorm.Model
@@ -14,4 +18,24 @@ type UserGroup struct {
 	UserID  uint
 	Group   Group `gorm:"foreignKey:GroupID"`
 	GroupID uint
+}
+
+func (g *Group) HomeDir() string {
+	return path.Join(GroupScopeDir, g.Name)
+}
+
+type UserFileProvider struct {
+	gorm.Model
+	User           User `gorm:"foreignKey:UserID"`
+	UserID         uint
+	FileProvider   FileProvider `gorm:"foreignKey:FileProviderID"`
+	FileProviderID uint
+}
+
+type GroupFileProvider struct {
+	gorm.Model
+	Group          Group `gorm:"foreignKey:GroupID"`
+	GroupID        uint
+	FileProvider   FileProvider `gorm:"foreignKey:FileProviderID"`
+	FileProviderID uint
 }

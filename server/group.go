@@ -31,21 +31,3 @@ func (s *GaCloudServer) UserRemoveGroup(ctx context.Context, user *model.User, g
 
 	return nil
 }
-
-func (s *GaCloudServer) GetUserGroupIds(ctx context.Context, user *model.User) []uint {
-	var userGroups []*model.UserGroup
-	if err := s.db.WithContext(ctx).
-		Where("user_id = ?", user.ID).
-		Select("group_id").
-		Find(&userGroups).Error; err != nil {
-		s.logger.Err(err).Msg("get user groups failed")
-		return nil
-	}
-
-	var groupIds []uint
-	for _, ug := range userGroups {
-		groupIds = append(groupIds, ug.GroupID)
-	}
-
-	return groupIds
-}

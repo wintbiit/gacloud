@@ -3,6 +3,9 @@ package server
 import (
 	"context"
 	"io"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/runtimefieldtype"
@@ -26,32 +29,63 @@ if (index > 0) {
 }
 `
 
-const permissionScript = `
-if (doc['owner_type'].value == 0 && doc['owner_id'].value == params.operator_id) {
-	  return true;
-} else if (doc['owner_type'].value == 1 && params.user_group_ids.contains(doc['owner_id'].value)) {
-	  return true;
-} else {
-	  return false;
-}
-`
-
 var (
 	filePool = sync.Pool{
 		New: func() interface{} {
 			return &model.File{}
 		},
 	}
-	permissionScriptId = "permission"
-	listSearchSize     = 1000
-	fp                 = "fp"
-	listSearchAggSize  = 1
+	listSearchSize    = 1000
+	fp                = "fp"
+	listSearchAggSize = 1
 )
 
-func (s *GaCloudServer) PutFile(ctx context.Context, f *model.File, reader io.ReadCloser) error {
+func (s *GaCloudServer) FsPermCheck(ctx context.Context, operator *model.User, p *string) bool {
+	if operator == nil {
+		return false
+	}
+
+	// if relative path, convert to absolute path in user scope
+	if !path.IsAbs(*p) {
+		*p = path.Join(operator.HomeDir(), *p)
+	}
+
+	// in user scope
+	if strings.HasPrefix(*p, operator.HomeDir()) {
+		return true
+	}
+
+	// in group scope
+	if strings.HasPrefix(*p, model.GroupScopeDir) {
+		sp := strings.SplitN(*p, "/", 5)
+		if len(sp) != 5 {
+			return false
+		}
+
+		gidStr := sp[3]
+		gid, err := strconv.ParseUint(gidStr, 10, 64)
+		if err != nil {
+			return false
+		}
+
+		if !s.IsUserInGroup(ctx, operator, uint(gid)) {
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (s *GaCloudServer) PutFile(ctx context.Context, operator *model.User, f *model.File, reader io.ReadCloser) error {
+	if !s.FsPermCheck(ctx, operator, &f.Path) {
+		return utils.ErrorPermissionDenied
+	}
+
 	// Write file content to provider first
 	// TODO: writer lock
-	err := s.WriteFile(ctx, f, reader)
+	err := s.WriteFile(ctx, operator, f, reader)
 	if err != nil {
 		return err
 	}
@@ -66,13 +100,21 @@ func (s *GaCloudServer) PutFile(ctx context.Context, f *model.File, reader io.Re
 	return nil
 }
 
-func (s *GaCloudServer) DeleteFile(ctx context.Context, path string) error {
+func (s *GaCloudServer) DeleteFile(ctx context.Context, operator *model.User, path string) error {
+	if !s.FsPermCheck(ctx, operator, &path) {
+		return utils.ErrorPermissionDenied
+	}
+
 	_, err := s.es.Delete(s.esIndex, path).Do(ctx)
 
 	return err
 }
 
-func (s *GaCloudServer) GetFileBySum(ctx context.Context, sum string) (*model.File, func(), error) {
+func (s *GaCloudServer) GetFileBySum(ctx context.Context, operator *model.User, sum string) (*model.File, func(), error) {
+	if !s.FsPermCheck(ctx, operator, &sum) {
+		return nil, nil, utils.ErrorPermissionDenied
+	}
+
 	query := types.Query{
 		Match: map[string]types.MatchQuery{
 			"sum": {
@@ -103,7 +145,11 @@ func (s *GaCloudServer) GetFileBySum(ctx context.Context, sum string) (*model.Fi
 	return file, cleanup, nil
 }
 
-func (s *GaCloudServer) GetFileByPath(ctx context.Context, path string) (*model.File, func(), error) {
+func (s *GaCloudServer) GetFileByPath(ctx context.Context, operator *model.User, path string) (*model.File, func(), error) {
+	if !s.FsPermCheck(ctx, operator, &path) {
+		return nil, nil, utils.ErrorPermissionDenied
+	}
+
 	resp, err := s.es.Get(s.esIndex, utils.EncodeElasticSearchID(path)).Do(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -125,41 +171,51 @@ func (s *GaCloudServer) GetFileByPath(ctx context.Context, path string) (*model.
 	return file, cleanup, nil
 }
 
-func (s *GaCloudServer) GetFileReader(ctx context.Context, f *model.File) (io.Reader, bool, error) {
-	provider, ok := s.fileProviders[f.ProviderId]
-	if !ok {
-		return nil, false, utils.ErrorFileProviderNotFound
+func (s *GaCloudServer) GetFileReader(ctx context.Context, operator *model.User, f *model.File) (io.Reader, bool, error) {
+	if !s.FsPermCheck(ctx, operator, &f.Path) {
+		return nil, false, utils.ErrorPermissionDenied
+	}
+
+	provider, err := s.GetProvider(f.ProviderId)
+	if err != nil {
+		return nil, false, err
 	}
 
 	return provider.Get(ctx, f.Sum)
 }
 
-func (s *GaCloudServer) WriteFile(ctx context.Context, f *model.File, reader io.Reader) error {
-	provider, ok := s.fileProviders[f.ProviderId]
-	if !ok {
-		return utils.ErrorFileProviderNotFound
+func (s *GaCloudServer) WriteFile(ctx context.Context, operator *model.User, f *model.File, reader io.Reader) error {
+	if !s.FsPermCheck(ctx, operator, &f.Path) {
+		return utils.ErrorPermissionDenied
+	}
+
+	provider, err := s.GetProvider(f.ProviderId)
+	if err != nil {
+		return err
 	}
 
 	return provider.Put(ctx, f.Sum, reader)
 }
 
-func (s *GaCloudServer) FileExists(ctx context.Context, path string) (bool, error) {
+func (s *GaCloudServer) FileExists(ctx context.Context, operator *model.User, path string) (bool, error) {
+	if !s.FsPermCheck(ctx, operator, &path) {
+		return false, utils.ErrorPermissionDenied
+	}
+
 	return s.es.Exists(s.esIndex, utils.EncodeElasticSearchID(path)).Do(ctx)
 }
 
-type SearchAggs struct {
-	Buckets []struct {
-		Key         string `json:"key"`
-		AnyDocument struct {
-			Hits struct {
-				Hits []model.File `json:"hits"`
-			} `json:"hits"`
-		} `json:"any_document"`
-	} `json:"buckets"`
+func (s *GaCloudServer) ListFiles(ctx context.Context, operator *model.User, dir string) ([]*model.File, func(), error) {
+	if !s.FsPermCheck(ctx, operator, &dir) {
+		return nil, func() {}, utils.ErrorPermissionDenied
+	}
+
+	return s.listFiles(ctx, dir)
 }
 
-func (s *GaCloudServer) ListFiles(ctx context.Context, operator *model.User, dir string) ([]*model.File, func(), error) {
-	// groupIds := s.GetUserGroupIds(ctx, operator)
+// listFiles lists files in a directory, returns a list of files and a cleanup function
+// with no permission check
+func (s *GaCloudServer) listFiles(ctx context.Context, dir string) ([]*model.File, func(), error) {
 	dir = utils.CleanDirPath(dir)
 
 	searchReq := search.Request{
