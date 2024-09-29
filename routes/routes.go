@@ -9,16 +9,21 @@ type registry struct {
 	party  string
 	cb     func(iris.Party)
 	behind bool
+	auth   bool
 }
 
 var hooks = make([]registry, 0)
 
 func addHook(party string, cb func(iris.Party)) {
-	hooks = append(hooks, registry{party, cb, true})
+	hooks = append(hooks, registry{party, cb, true, false})
 }
 
 func addHookFront(party string, cb func(iris.Party)) {
-	hooks = append(hooks, registry{party, cb, false})
+	hooks = append(hooks, registry{party, cb, false, false})
+}
+
+func addHookAuth(party string, cb func(iris.Party)) {
+	hooks = append(hooks, registry{party, cb, true, true})
 }
 
 func RegisterRoutes(app iris.Party) {
@@ -26,6 +31,9 @@ func RegisterRoutes(app iris.Party) {
 		party := app.Party(hook.party)
 		if hook.behind {
 			party.Use(coreCheck())
+		}
+		if hook.auth {
+			party.Use(userMiddleware)
 		}
 		hook.cb(party)
 	}
@@ -49,4 +57,16 @@ func coreCheck() iris.Handler {
 
 		ctx.Next()
 	}
+}
+
+func userMiddleware(ctx iris.Context) {
+	s := server.GetServer()
+
+	verify := s.GetUserMiddleware()
+	if verify == nil {
+		ctx.StopWithStatus(iris.StatusUnauthorized)
+		return
+	}
+
+	verify(ctx)
 }

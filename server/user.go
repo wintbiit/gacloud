@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/kataras/iris/v12"
 	"github.com/wintbiit/gacloud/model"
 	"github.com/wintbiit/gacloud/utils"
 	"regexp"
@@ -74,4 +75,31 @@ func (s *GaCloudServer) userLoginByEmail(ctx context.Context, email, password st
 	user := new(model.User)
 	err := s.db.WithContext(ctx).Where("email = ? AND password = ?", email, password).First(user).Error
 	return user, err
+}
+
+type UserClaims struct {
+	ID    uint   `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (s *GaCloudServer) GenerateUserToken(user *model.User) (string, error) {
+	claims := UserClaims{
+		ID:    user.ID,
+		Name:  user.Name,
+		Email: user.Email,
+	}
+
+	token, err := s.signer.Sign(claims)
+	if err != nil {
+		return "", err
+	}
+
+	return string(token), nil
+}
+
+func (s *GaCloudServer) GetUserMiddleware() iris.Handler {
+	return s.verifier.Verify(func() interface{} {
+		return new(UserClaims)
+	})
 }

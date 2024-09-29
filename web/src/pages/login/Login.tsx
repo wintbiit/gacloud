@@ -1,22 +1,17 @@
 import styles from "../../styles/login.module.scss";
-import {Button, Checkbox, Form} from "@douyinfe/semi-ui";
+import {Button, Checkbox, Form, Typography} from "@douyinfe/semi-ui";
 
 function Login() {
+    const { Title } = Typography;
+
     return (
         <div className={styles.login}>
             <div className={styles.component66}>
                 <img
-                    src="https://lf9-static.semi.design/obj/semi-tos/template/caee33dd-322d-4e91-a4ed-eea1b94605bb.png"
+                    src="/gacloud.svg"
                     className={styles.logo}
                 />
-                <div className={styles.header}>
-                    <p className={styles.title}>欢迎回来</p>
-                    <p className={styles.text}>
-                        <span className={styles.text}>登录</span>
-                        <span className={styles.text1}> Semi Design </span>
-                        <span className={styles.text2}>账户</span>
-                    </p>
-                </div>
+                <Title>登录到 GaCloud </Title>
             </div>
             <div className={styles.form}>
                 <Form className={styles.inputs}>

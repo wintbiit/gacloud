@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/kataras/iris/v12/middleware/jwt"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
@@ -21,6 +22,8 @@ type GaCloudServer struct {
 	esIndex       string
 	fileProviders map[uint]fs.FileProvider
 	logger        *zerolog.Logger
+	signer        *jwt.Signer
+	verifier      *jwt.Verifier
 	Info          *model.AppInfo
 	Maintenance   bool
 }
@@ -61,11 +64,33 @@ func NewLocalGaCloudServer() (*GaCloudServer, error) {
 		SiteLogo:    config.GetWithDefault("site.logo", ""),
 	}
 
+	jwtSecret, ok := config.Get("jwt.secret")
+	if !ok {
+		jwtSecret = utils.RandStr(32)
+		config.Set("jwt.secret", jwtSecret)
+	}
+
+	jwtExpiration, ok := config.Get("jwt.expiration")
+	if !ok {
+		jwtExpiration = "1h"
+		config.Set("jwt.expiration", jwtExpiration)
+	}
+
+	jwtExpirationDuration, err := time.ParseDuration(jwtExpiration)
+	if err != nil {
+		return nil, err
+	}
+
+	signer := jwt.NewSigner(jwt.HS256, []byte(jwtSecret), jwtExpirationDuration)
+	verifier := jwt.NewVerifier(jwt.HS256, []byte(jwtSecret))
+
 	return &GaCloudServer{
 		db:            db,
 		es:            es,
 		esIndex:       elasticSearchIndex,
 		fileProviders: providers,
+		signer:        signer,
+		verifier:      verifier,
 		logger:        &serverLogger,
 		Info:          serverInfo,
 	}, nil
