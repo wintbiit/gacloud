@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/kataras/iris/v12"
+	"github.com/rs/zerolog/log"
 	"github.com/wintbiit/gacloud/server"
 )
 
@@ -38,6 +39,7 @@ func Login(ctx iris.Context) {
 
 	token, err := s.GenerateUserToken(user)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to generate token")
 		ctx.StopWithStatus(iris.StatusInternalServerError)
 		return
 	}

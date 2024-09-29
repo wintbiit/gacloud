@@ -17,3 +17,25 @@ type User struct {
 func (u *User) HomeDir() string {
 	return path.Join(UserScopeDir, u.Name)
 }
+
+func (u *User) ToClaims() *UserClaims {
+	return &UserClaims{
+		ID:    u.ID,
+		Name:  u.Name,
+		Email: u.Email,
+	}
+}
+
+type UserClaims struct {
+	ID    uint   `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (u *UserClaims) ToUser() *User {
+	return &User{
+		Model: gorm.Model{ID: u.ID},
+		Name:  u.Name,
+		Email: u.Email,
+	}
+}

@@ -77,18 +77,8 @@ func (s *GaCloudServer) userLoginByEmail(ctx context.Context, email, password st
 	return user, err
 }
 
-type UserClaims struct {
-	ID    uint   `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
 func (s *GaCloudServer) GenerateUserToken(user *model.User) (string, error) {
-	claims := UserClaims{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
-	}
+	claims := user.ToClaims()
 
 	token, err := s.signer.Sign(claims)
 	if err != nil {
@@ -100,6 +90,6 @@ func (s *GaCloudServer) GenerateUserToken(user *model.User) (string, error) {
 
 func (s *GaCloudServer) GetUserMiddleware() iris.Handler {
 	return s.verifier.Verify(func() interface{} {
-		return new(UserClaims)
+		return new(model.UserClaims)
 	})
 }

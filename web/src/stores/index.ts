@@ -1,13 +1,13 @@
-import { configureStore } from '@reduxjs/toolkit';
-import {TypedUseSelectorHook, useDispatch, useSelector} from "react-redux";
-import appInfoReducer from './appInfo';
-import serverInfoReducer from './serverInfo';
+import { configureStore } from "@reduxjs/toolkit";
+import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
+import appInfoReducer from "./appInfo";
+import serverInfoReducer from "./serverInfo";
 
 const store = configureStore({
-    reducer: {
-        appInfo: appInfoReducer,
-        serverInfo: serverInfoReducer,
-    },
+  reducer: {
+    appInfo: appInfoReducer,
+    serverInfo: serverInfoReducer,
+  },
 });
 
 export type RootState = ReturnType<typeof store.getState>;

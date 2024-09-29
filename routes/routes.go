@@ -33,7 +33,7 @@ func RegisterRoutes(app iris.Party) {
 			party.Use(coreCheck())
 		}
 		if hook.auth {
-			party.Use(userMiddleware)
+			party.Use(verifyMiddleware)
 		}
 		hook.cb(party)
 	}
@@ -59,7 +59,7 @@ func coreCheck() iris.Handler {
 	}
 }
 
-func userMiddleware(ctx iris.Context) {
+func verifyMiddleware(ctx iris.Context) {
 	s := server.GetServer()
 
 	verify := s.GetUserMiddleware()
