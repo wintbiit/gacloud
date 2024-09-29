@@ -38,19 +38,86 @@ const setupDatabase = async (values: MySQLOptionsProps | PostgreSQLOptionsProps 
     });
 }
 
-interface TestDatabaseResponse {
+interface TestResponse {
     success: boolean,
+    reason: string,
 }
 
-async function testDatabase(values: MySQLOptionsProps | PostgreSQLOptionsProps | SQLiteOptionsProps) : Promise<boolean> {
-    return axioser.post<TestDatabaseResponse>("/setup/database/test", {
+async function testDatabase(values: MySQLOptionsProps | PostgreSQLOptionsProps | SQLiteOptionsProps) : Promise<TestResponse> {
+    return (await axioser.post<TestResponse>("/setup/database/test", {
         type: values.type,
         params: values,
-    }).then(res => res.data.success);
+    })).data;
+}
+
+export interface ElasticsearchOptionsProps {
+    host: string,
+    user: string,
+    password: string,
+}
+
+const setupElasticsearch = async (values: ElasticsearchOptionsProps) => {
+    await axioser.post("/setup/elasticsearch", values);
+}
+
+const testElasticsearch = async (values: ElasticsearchOptionsProps) : Promise<TestResponse> => {
+    return (await axioser.post<TestResponse>("/setup/elasticsearch/test", values)).data;
+}
+
+export interface StorageOptionsProps {
+    name: string,
+    type: string,
+    credential: any,
+}
+
+export interface StorageProviderConfig {
+    rootPath: string,
+    providers: string[]
+}
+
+const setupStorage = async (values: StorageOptionsProps) => {
+    await axioser.post("/setup/storage", {
+        name: values.name,
+        type: values.type,
+        credential: JSON.stringify(values.credential),
+    });
+}
+
+const testStorage = async (values: StorageOptionsProps) : Promise<TestResponse> => {
+    return (await axioser.post<TestResponse>("/setup/storage/test", {
+        name: values.name,
+        type: values.type,
+        credential: JSON.stringify(values.credential),
+    })).data;
+}
+
+const getStorageProviders = async () : Promise<StorageProviderConfig> => {
+    return (await axioser.get<StorageProviderConfig>("/setup/storage/providers")).data;
+}
+
+export interface SetAdminProps {
+    username: string,
+    password: string,
+    email: string,
+}
+
+const setAdmin = async (values: SetAdminProps) => {
+    await axioser.post("/setup/admin", values);
+}
+
+const finishSetup = async () => {
+    await axioser.post("/setup/finish");
 }
 
 export {
     getSetupStatus,
     setupDatabase,
-    testDatabase
+    testDatabase,
+    setupElasticsearch,
+    testElasticsearch,
+    setupStorage,
+    testStorage,
+    getStorageProviders,
+    setAdmin,
+    finishSetup,
 }

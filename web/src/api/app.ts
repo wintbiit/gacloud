@@ -22,6 +22,16 @@ export interface ServerInfo {
     addr: string;
 }
 
+export const DefaultServerInfo: ServerInfo = {
+    version: "0.0.0",
+    build_revision: "0000000",
+    build_time: "0000-00-00T00:00:00Z",
+    go_version: "0.0.0",
+    data_dir: "",
+    log_dir: "",
+    addr: "",
+}
+
 export const getAppInfo = async (): Promise<AppInfo> => {
     const resp = await axioser.get<AppInfo>("/appinfo");
     return resp.data;

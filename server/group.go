@@ -31,3 +31,15 @@ func (s *GaCloudServer) UserRemoveGroup(ctx context.Context, user *model.User, g
 
 	return nil
 }
+
+func (s *GaCloudServer) CreateGroup(ctx context.Context, name string) (*model.Group, error) {
+	group := &model.Group{
+		Name: name,
+	}
+
+	if err := s.db.WithContext(ctx).Create(group).Error; err != nil {
+		return nil, err
+	}
+
+	return group, nil
+}

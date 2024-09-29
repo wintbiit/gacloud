@@ -1,18 +1,20 @@
-import { StrictMode } from 'react'
+import {lazy, StrictMode, Suspense} from 'react'
 import { createRoot } from 'react-dom/client'
 import "reset-css/reset.css";
 import './styles/index.css'
 import {createBrowserRouter, RouterProvider} from "react-router-dom";
 import {Provider} from "react-redux";
 import store from "./stores"
-import Error from "./pages/error/Error.tsx";
-import Dashboard from "./pages/dashboard/Dashboard.tsx";
-import Login from "./pages/login/Login.tsx";
-import Setup from "./pages/setup/Setup.tsx";
-import Maintenance from "./pages/setup/Maintenance.tsx";
-import DashboardLayout from "./pages/DashboardLayout.tsx";
-import StandaloneLayout from "./pages/StandaloneLayout.tsx";
+import Loading from "./pages/Loading.tsx";
+const DashboardLayout = lazy(() => import('./pages/DashboardLayout.tsx'));
+const Dashboard = lazy(() => import('./pages/dashboard/Dashboard.tsx'));
+const Error = lazy(() => import('./pages/error/Error.tsx'));
+const Login = lazy(() => import('./pages/login/Login.tsx'));
+const Setup = lazy(() => import('./pages/setup/Setup.tsx'));
+const Maintenance = lazy(() => import('./pages/setup/Maintenance.tsx'));
+const StandaloneLayout = lazy(() => import('./pages/StandaloneLayout.tsx'));
 import {logout} from "./api";
+import setupLoader from "./pages/loaders/setupLoader.ts";
 
 const router = createBrowserRouter([
     {
@@ -41,6 +43,7 @@ const router = createBrowserRouter([
             {
                 path: "/setup",
                 element: <Setup />,
+                loader: setupLoader,
             },
             {
                 path: "/maintenance",
@@ -53,7 +56,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <Provider store={store}>
-            <RouterProvider router={router} />
+            <Suspense fallback={<Loading />}>
+                <RouterProvider router={router} fallbackElement={<Loading />} />
+            </Suspense>
         </Provider>
     </StrictMode>
 )

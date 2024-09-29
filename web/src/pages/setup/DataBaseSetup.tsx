@@ -1,4 +1,4 @@
-import {Button, Form, Space} from "@douyinfe/semi-ui";
+import {Button, Form, Notification, Space} from "@douyinfe/semi-ui";
 import {useState} from "react";
 import {IconTick} from "@douyinfe/semi-icons";
 import {MySQLOptionsProps, PostgreSQLOptionsProps, SQLiteOptionsProps, testDatabase, setupDatabase} from "../../api/setup.ts";
@@ -25,8 +25,8 @@ function MySQLOptions() {
         <>
             <Form.Input field="host" label="主机" placeholder="输入主机地址" />
             <Form.Input field="port" label="端口" placeholder="输入端口" />
-            <Form.Input field="username" label="用户名" placeholder="输入用户名" />
-            <Form.Input field="password" label="密码" placeholder="输入密码" />
+            <Form.Input field="username" label="用户名" autoComplete="username" placeholder="输入用户名" />
+            <Form.Input field="password" type="password" label="密码" autoComplete="password" placeholder="输入密码" />
             <Form.Input field="database" label="数据库" placeholder="输入数据库名称" />
         </>
     )
@@ -37,8 +37,8 @@ function PostgreSQLOptions() {
         <>
             <Form.Input field="host" label="主机" placeholder="输入主机地址" />
             <Form.Input field="port" label="端口" placeholder="输入端口" />
-            <Form.Input field="username" label="用户名" placeholder="输入用户名" />
-            <Form.Input field="password" label="密码" placeholder="输入密码" />
+            <Form.Input field="username" label="用户名" autoComplete="username" placeholder="输入用户名" />
+            <Form.Input field="password" type="password" autoComplete="password" label="密码" placeholder="输入密码" />
             <Form.Input field="database" label="数据库" placeholder="输入数据库名称" />
         </>
     )
@@ -58,12 +58,19 @@ function DatabaseSetup({onFinish}: {onFinish: () => void}) {
 
     const validate = async (formApi: any, values: MySQLOptionsProps | PostgreSQLOptionsProps | SQLiteOptionsProps) => {
         setLoading(true);
+        setValid(false);
 
         await testDatabase(values).then(res => {
-            setValid(res);
+            setValid(res.success);
 
-            if (!res) {
+            if (!res.success) {
                 formApi.setError("type", "连接失败，请检查配置");
+                Notification.error({
+                    title: `${values.type} 连接失败`,
+                    type: "warning",
+                    content: res.reason,
+                    duration: 5
+                })
             }
         }).finally(() => {
             setLoading(false);
@@ -71,7 +78,18 @@ function DatabaseSetup({onFinish}: {onFinish: () => void}) {
     }
 
     const submit = async (values: MySQLOptionsProps | PostgreSQLOptionsProps | SQLiteOptionsProps) => {
-        await setupDatabase(values);
+        await setupDatabase(values).catch(err => {
+            Notification.error({
+                title: "数据库设置失败",
+                content: err,
+                duration: 5
+            })
+        });
+
+        Notification.success({
+            title: "数据库设置成功",
+            duration: 5
+        })
 
         onFinish();
     }

@@ -27,3 +27,11 @@ func RegisterFileProvider(name string, factory FileProviderFactory, config inter
 func GetFileProviderFactory(name string) FileProviderFactory {
 	return fileProviderFactories[name]
 }
+
+func ListFileProviderTypes() []string {
+	var names []string
+	for name := range fileProviderFactories {
+		names = append(names, name)
+	}
+	return names
+}

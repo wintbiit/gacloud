@@ -3,8 +3,15 @@ import {AppInfo, DefaultAppInfo, getAppInfo} from "../api/app.ts";
 
 export const appInfoSlice = createSlice({
     name: 'appInfo',
-    initialState: DefaultAppInfo,
+    initialState: {
+        appInfo: DefaultAppInfo
+    },
     reducers: {
+        updateAppInfo: (state) => {
+            getAppInfo().then((appInfo: AppInfo) => {
+                state.appInfo = appInfo;
+            })
+        }
     },
 });
 

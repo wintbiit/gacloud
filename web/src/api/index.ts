@@ -37,7 +37,12 @@ axioser.interceptors.response.use((response) => {
         document.location.href = "/setup"
     }
 
-    return Promise.reject(error)
+    // reject only if error code is 404, 400, 500
+    if (error.response.status === 404 || error.response.status === 400 || error.response.status === 500) {
+        return Promise.reject(error)
+    }
+
+    return error.response
 })
 
 const logout = () => {

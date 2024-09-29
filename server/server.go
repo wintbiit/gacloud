@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"path"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
@@ -84,6 +83,7 @@ func GetServer() *GaCloudServer {
 
 	s, err := NewLocalGaCloudServer()
 	if err != nil {
+		log.Error().Err(err).Msg("failed to setup server")
 		return nil
 	}
 
@@ -138,19 +138,26 @@ func setupElasticSearch(ctx context.Context) (*elasticsearch.TypedClient, error)
 		return nil, err
 	}
 
-	_, err = es.Indices.Create(elasticSearchIndex).Mappings(&types.TypeMapping{
-		Properties: map[string]types.Property{
-			"sum":         types.NewTextProperty(),
-			"path":        types.NewKeywordProperty(),
-			"size":        types.NewIntegerNumberProperty(),
-			"mime":        types.NewTextProperty(),
-			"owner_type":  types.NewIntegerNumberProperty(),
-			"owner_id":    types.NewIntegerNumberProperty(),
-			"provider_id": types.NewIntegerNumberProperty(),
-		},
-	}).Do(ctx)
+	exists, err := es.Indices.Exists(elasticSearchIndex).Do(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if !exists {
+		_, err = es.Indices.Create(elasticSearchIndex).Mappings(&types.TypeMapping{
+			Properties: map[string]types.Property{
+				"sum":         types.NewTextProperty(),
+				"path":        types.NewKeywordProperty(),
+				"size":        types.NewIntegerNumberProperty(),
+				"mime":        types.NewTextProperty(),
+				"owner_type":  types.NewIntegerNumberProperty(),
+				"owner_id":    types.NewIntegerNumberProperty(),
+				"provider_id": types.NewIntegerNumberProperty(),
+			},
+		}).Do(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return es, nil
@@ -166,9 +173,29 @@ func setupFileProviders(ctx context.Context, db *gorm.DB) (map[uint]fs.FileProvi
 		return nil, err
 	}
 
-	providers[DefaultFileProviderId] = fs.NewLocalFileProviderWithConfig(fs.LocalFileProviderConfig{
-		MountDir: path.Join(utils.ServerInfo.DataDir, "files"),
-	})
+	storage0Type, ok := config.Get("storage0.type")
+	if !ok {
+		return nil, utils.ErrorSetupNotCompleted
+	}
+
+	storage0Credential, ok := config.Get("storage0.credential")
+	if !ok {
+		return nil, utils.ErrorSetupNotCompleted
+	}
+
+	storage0Factory := fs.GetFileProviderFactory(storage0Type)
+	if storage0Factory == nil {
+		log.Error().Str("provider", storage0Type).Msg("file provider not found")
+		return nil, utils.ErrorFileProviderNotFound
+	}
+
+	storage0, err := storage0Factory([]byte(storage0Credential))
+	if err != nil {
+		log.Error().Str("provider", storage0Type).Err(err).Msg("failed to create file provider")
+		return nil, err
+	}
+
+	providers[0] = storage0
 
 	for _, provider := range fileProviders {
 		factory := fs.GetFileProviderFactory(provider.Type)
