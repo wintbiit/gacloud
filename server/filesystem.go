@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/runtimefieldtype"
+
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/refresh"
@@ -13,19 +15,14 @@ import (
 	"github.com/wintbiit/gacloud/utils"
 )
 
-const listFileScript = `
-def path = doc['path'].value;
-def dir = params.dir;
-if (path.startsWith(dir)) {
-	  path = path.substring(dir.length());
-	  def index = path.indexOf('/');
-	  if (index != -1) {
-		    return path.substring(0, index);
-	  } else {
-		    return path;
-	  }
+var listFileScript = `
+String p = doc['path'].value;
+p = p.substring(params.dir.length());
+def index = p.indexOf('/');
+if (index > 0) {
+  emit(p.substring(0, index + 1));
 } else {
-	  return '';
+  emit(p)
 }
 `
 
@@ -45,8 +42,10 @@ var (
 			return &model.File{}
 		},
 	}
-	listFileScriptId   = "list_file"
 	permissionScriptId = "permission"
+	listSearchSize     = 1000
+	fp                 = "fp"
+	listSearchAggSize  = 1
 )
 
 func (s *GaCloudServer) PutFile(ctx context.Context, f *model.File, reader io.ReadCloser) error {
@@ -148,51 +147,100 @@ func (s *GaCloudServer) FileExists(ctx context.Context, path string) (bool, erro
 	return s.es.Exists(s.esIndex, utils.EncodeElasticSearchID(path)).Do(ctx)
 }
 
+type SearchAggs struct {
+	Buckets []struct {
+		Key         string `json:"key"`
+		AnyDocument struct {
+			Hits struct {
+				Hits []model.File `json:"hits"`
+			} `json:"hits"`
+		} `json:"any_document"`
+	} `json:"buckets"`
+}
+
 func (s *GaCloudServer) ListFiles(ctx context.Context, operator *model.User, dir string) ([]*model.File, func(), error) {
 	// groupIds := s.GetUserGroupIds(ctx, operator)
 	dir = utils.CleanDirPath(dir)
 
-	searchReq := &search.Request{
-		ScriptFields: map[string]types.ScriptField{
-			"fd": {
-				Script: types.Script{
-					Id: &listFileScriptId,
-					Params: map[string]json.RawMessage{
-						"dir": json.RawMessage(`"` + dir + `"`),
+	searchReq := search.Request{
+		Size: &listSearchSize,
+		Query: &types.Query{
+			Bool: &types.BoolQuery{
+				Must: []types.Query{
+					{
+						Prefix: map[string]types.PrefixQuery{
+							"path": {
+								Value: dir,
+							},
+						},
 					},
 				},
 			},
 		},
-		Source_: types.SourceConfig(true),
-		Query: &types.Query{
-			MatchAll: &types.MatchAllQuery{},
+		RuntimeMappings: map[string]types.RuntimeField{
+			"fp": {
+				Type: runtimefieldtype.Keyword,
+				Script: &types.Script{
+					Source: &listFileScript,
+					Params: map[string]json.RawMessage{
+						"dir": utils.JsonRaw(dir),
+					},
+				},
+			},
+		},
+		Aggregations: map[string]types.Aggregations{
+			"group_by_fp": {
+				Terms: &types.TermsAggregation{
+					Field: &fp,
+				},
+				Aggregations: map[string]types.Aggregations{
+					"any_document": {
+						TopHits: &types.TopHitsAggregation{
+							Size: &listSearchAggSize,
+						},
+					},
+				},
+			},
 		},
 	}
 
-	resp, err := s.es.Search().Index(s.esIndex).Request(searchReq).Do(ctx)
+	resp, err := s.es.Search().Index(s.esIndex).Request(&searchReq).Do(ctx)
 	if err != nil {
 		return nil, func() {}, err
 	}
 
-	listFiles := make([]*model.File, len(resp.Hits.Hits))
-	for i, hit := range resp.Hits.Hits {
-		listFile := filePool.Get().(*model.File)
-		err = json.Unmarshal(hit.Source_, listFile)
+	aggs, ok := resp.Aggregations["group_by_fp"]
+	if !ok {
+		return nil, func() {}, nil
+	}
+
+	searchAggs, ok := aggs.(*types.StringTermsAggregate)
+	if !ok {
+		return nil, func() {}, nil
+	}
+
+	buckets, ok := searchAggs.Buckets.([]types.StringTermsBucket)
+	if !ok {
+		return nil, func() {}, nil
+	}
+
+	files := make([]*model.File, len(buckets))
+	for i, bucket := range buckets {
+		files[i] = filePool.Get().(*model.File)
+		hit := bucket.Aggregations["any_document"].(*types.TopHitsAggregate).Hits.Hits[0]
+		err = json.Unmarshal(hit.Source_, files[i])
 		if err != nil {
 			return nil, func() {}, err
 		}
-		fd, ok := hit.Fields["fd"]
-		if ok {
-			listFile.Fd = string(fd)
-		}
-		listFiles[i] = listFile
+
+		files[i].Fp = bucket.Key.(string)
 	}
 
 	cleanup := func() {
-		for _, listFile := range listFiles {
-			filePool.Put(listFile)
+		for _, f := range files {
+			filePool.Put(f)
 		}
 	}
 
-	return listFiles, cleanup, nil
+	return files, cleanup, nil
 }

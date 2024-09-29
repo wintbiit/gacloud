@@ -139,21 +139,7 @@ func setupElasticSearch() (*elasticsearch.TypedClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	resp, err := es.PutScript(listFileScriptId).Script(&types.StoredScript{
-		Lang: scriptlanguage.ScriptLanguage{
-			Name: "painless",
-		},
-		Source: listFileScript,
-	}).Do(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !resp.Acknowledged {
-		return nil, utils.ErrorElasticSearchScriptNotAcknowledged
-	}
-
-	resp, err = es.PutScript(permissionScriptId).Script(&types.StoredScript{
+	_, err = es.PutScript(permissionScriptId).Script(&types.StoredScript{
 		Lang: scriptlanguage.ScriptLanguage{
 			Name: "painless",
 		},
@@ -163,8 +149,19 @@ func setupElasticSearch() (*elasticsearch.TypedClient, error) {
 		return nil, err
 	}
 
-	if !resp.Acknowledged {
-		return nil, utils.ErrorElasticSearchScriptNotAcknowledged
+	_, err = es.Indices.Create(elasticSearchIndex).Mappings(&types.TypeMapping{
+		Properties: map[string]types.Property{
+			"sum":         types.NewTextProperty(),
+			"path":        types.NewKeywordProperty(),
+			"size":        types.NewIntegerNumberProperty(),
+			"mime":        types.NewTextProperty(),
+			"owner_type":  types.NewIntegerNumberProperty(),
+			"owner_id":    types.NewIntegerNumberProperty(),
+			"provider_id": types.NewIntegerNumberProperty(),
+		},
+	}).Do(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	return es, nil

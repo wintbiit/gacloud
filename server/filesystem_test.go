@@ -33,21 +33,7 @@ func TestFileSystem(t *testing.T) {
 
 	ctx := context.TODO()
 
-	resp, err := es.PutScript(listFileScriptId).Script(&types.StoredScript{
-		Lang: scriptlanguage.ScriptLanguage{
-			Name: "painless",
-		},
-		Source: listFileScript,
-	}).Do(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !resp.Acknowledged {
-		t.Fatal(utils.ErrorElasticSearchScriptNotAcknowledged)
-	}
-
-	resp, err = es.PutScript(permissionScriptId).Script(&types.StoredScript{
+	_, err = es.PutScript(permissionScriptId).Script(&types.StoredScript{
 		Lang: scriptlanguage.ScriptLanguage{
 			Name: "painless",
 		},
@@ -57,18 +43,12 @@ func TestFileSystem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !resp.Acknowledged {
-		t.Fatal(utils.ErrorElasticSearchScriptNotAcknowledged)
-	}
-
 	TestClearIndex(t)
 
-	getResp, err := es.GetScript(listFileScriptId).Do(ctx)
+	_, err = es.Indices.Create(elasticSearchIndex + "_test").Mappings(model.FileTypeMapping).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Logf("GetScript listFileScript: %+v", getResp.Script)
 
 	localFs, err := fs.NewLocalFileProvider([]byte(`{"mount_dir": "./data/gacloud"}`))
 	if err != nil {
@@ -147,8 +127,8 @@ func TestFileSystem(t *testing.T) {
 		t.Logf("ListFiles u1: %+v", f)
 	}
 
-	listFiles, cancel, err = server.ListFiles(ctx, &u1, "/home/g1")
-	defer cancel()
+	listFiles, clean, err := server.ListFiles(ctx, &u1, "/home/g1")
+	defer clean()
 
 	if err != nil {
 		t.Fatal(err)
