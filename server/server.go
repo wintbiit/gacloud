@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wintbiit/gacloud/config"
@@ -17,15 +16,16 @@ import (
 )
 
 type GaCloudServer struct {
-	db            *gorm.DB
-	es            *elasticsearch.TypedClient
-	esIndex       string
-	fileProviders map[uint]fs.FileProvider
-	logger        *zerolog.Logger
-	signer        *jwt.Signer
-	verifier      *jwt.Verifier
-	Info          *model.AppInfo
-	Maintenance   bool
+	db             *gorm.DB
+	es             *elasticsearch.TypedClient
+	esIndex        string
+	fileProviders  map[uint]fs.FileProvider
+	logger         *zerolog.Logger
+	signer         *jwt.Signer
+	downloadSigner *DownloadSigner
+	verifier       *jwt.Verifier
+	Info           *model.AppInfo
+	Maintenance    bool
 }
 
 const elasticSearchIndex = "gacloud.files.v1"
@@ -38,7 +38,7 @@ func init() {
 	})
 }
 
-func NewLocalGaCloudServer() (*GaCloudServer, error) {
+func NewLocalGaCloudServer(index string) (*GaCloudServer, error) {
 	setupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -84,15 +84,38 @@ func NewLocalGaCloudServer() (*GaCloudServer, error) {
 	signer := jwt.NewSigner(jwt.HS256, []byte(jwtSecret), jwtExpirationDuration)
 	verifier := jwt.NewVerifier(jwt.HS256, []byte(jwtSecret))
 
+	pkey, ok := config.Get("download_signer.pkey")
+	if !ok {
+		pkey = utils.RandStr(32)
+		config.Set("download_signer.pkey", pkey)
+	}
+
+	signDuration, ok := config.Get("download_signer.duration")
+	if !ok {
+		signDuration = "1h"
+		config.Set("download_signer.duration", signDuration)
+	}
+
+	signDurationDuration, err := time.ParseDuration(signDuration)
+	if err != nil {
+		return nil, err
+	}
+
+	downloadSigner := &DownloadSigner{
+		Pkey:     pkey,
+		Duration: signDurationDuration,
+	}
+
 	return &GaCloudServer{
-		db:            db,
-		es:            es,
-		esIndex:       elasticSearchIndex,
-		fileProviders: providers,
-		signer:        signer,
-		verifier:      verifier,
-		logger:        &serverLogger,
-		Info:          serverInfo,
+		db:             db,
+		es:             es,
+		esIndex:        index,
+		fileProviders:  providers,
+		signer:         signer,
+		downloadSigner: downloadSigner,
+		verifier:       verifier,
+		logger:         &serverLogger,
+		Info:           serverInfo,
 	}, nil
 }
 
@@ -106,11 +129,13 @@ func GetServer() *GaCloudServer {
 		return s
 	}
 
-	s, err := NewLocalGaCloudServer()
+	ser, err := NewLocalGaCloudServer(elasticSearchIndex)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to setup server")
 		return nil
 	}
+
+	s = ser
 
 	return s
 }
@@ -169,17 +194,7 @@ func setupElasticSearch(ctx context.Context) (*elasticsearch.TypedClient, error)
 	}
 
 	if !exists {
-		_, err = es.Indices.Create(elasticSearchIndex).Mappings(&types.TypeMapping{
-			Properties: map[string]types.Property{
-				"sum":         types.NewTextProperty(),
-				"path":        types.NewKeywordProperty(),
-				"size":        types.NewIntegerNumberProperty(),
-				"mime":        types.NewTextProperty(),
-				"owner_type":  types.NewIntegerNumberProperty(),
-				"owner_id":    types.NewIntegerNumberProperty(),
-				"provider_id": types.NewIntegerNumberProperty(),
-			},
-		}).Do(ctx)
+		_, err = es.Indices.Create(elasticSearchIndex).Mappings(model.FileTypeMapping).Do(ctx)
 		if err != nil {
 			return nil, err
 		}

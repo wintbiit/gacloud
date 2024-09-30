@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"fmt"
 
 	"github.com/goccy/go-json"
 	"github.com/rs/zerolog/log"
@@ -14,7 +15,7 @@ func RandStr(len int) string {
 		log.Panic().Err(err).Msg("failed to generate random string")
 	}
 
-	return string(buffer)
+	return fmt.Sprintf("%x", buffer)
 }
 
 func EncodeElasticSearchID(str string) string {

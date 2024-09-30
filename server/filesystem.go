@@ -2,11 +2,13 @@ package server
 
 import (
 	"context"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
 	"io"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/runtimefieldtype"
 
@@ -40,6 +42,8 @@ var (
 	listSearchAggSize = 1
 )
 
+// FsPermCheck checks if the operator has permission to access the path
+// both on user scope and group scope
 func (s *GaCloudServer) FsPermCheck(ctx context.Context, operator *model.User, p *string) bool {
 	if operator == nil {
 		return false
@@ -78,26 +82,40 @@ func (s *GaCloudServer) FsPermCheck(ctx context.Context, operator *model.User, p
 	return false
 }
 
-func (s *GaCloudServer) PutFile(ctx context.Context, operator *model.User, f *model.File, reader io.ReadCloser) error {
+// PutFile puts file metadata to elasticsearch
+func (s *GaCloudServer) PutFile(ctx context.Context, operator *model.User, f *model.File) error {
 	if !s.FsPermCheck(ctx, operator, &f.Path) {
 		return utils.ErrorPermissionDenied
 	}
 
-	// Write file content to provider first
-	// TODO: writer lock
-	err := s.WriteFile(ctx, operator, f, reader)
-	if err != nil {
-		return err
+	if f.CreatedAt.IsZero() {
+		f.CreatedAt = time.Now()
 	}
+
+	f.UpdatedAt = time.Now()
 
 	// Write file metadata to elasticsearch
 	// if document already exists, update it
-	_, err = s.es.Index(s.esIndex).Id(utils.EncodeElasticSearchID(f.Path)).Refresh(refresh.True).Request(f).Do(ctx)
+	_, err := s.es.Index(s.esIndex).Id(utils.EncodeElasticSearchID(f.Path)).Refresh(refresh.True).Request(f).Do(ctx)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// WriteFile writes file content to file provider and returns the checksum
+func (s *GaCloudServer) WriteFile(ctx context.Context, operator *model.User, f *model.File, reader io.Reader) (string, error) {
+	if !s.FsPermCheck(ctx, operator, &f.Path) {
+		return "", utils.ErrorPermissionDenied
+	}
+
+	provider, err := s.GetProvider(f.ProviderId)
+	if err != nil {
+		return "", err
+	}
+
+	return provider.Put(ctx, reader)
 }
 
 func (s *GaCloudServer) DeleteFile(ctx context.Context, operator *model.User, path string) error {
@@ -115,6 +133,10 @@ func (s *GaCloudServer) GetFileBySum(ctx context.Context, operator *model.User, 
 		return nil, nil, utils.ErrorPermissionDenied
 	}
 
+	return s.GetFileBySumNoCheck(ctx, sum)
+}
+
+func (s *GaCloudServer) GetFileBySumNoCheck(ctx context.Context, sum string) (*model.File, func(), error) {
 	query := types.Query{
 		Match: map[string]types.MatchQuery{
 			"sum": {
@@ -145,11 +167,7 @@ func (s *GaCloudServer) GetFileBySum(ctx context.Context, operator *model.User, 
 	return file, cleanup, nil
 }
 
-func (s *GaCloudServer) GetFileByPath(ctx context.Context, operator *model.User, path string) (*model.File, func(), error) {
-	if !s.FsPermCheck(ctx, operator, &path) {
-		return nil, nil, utils.ErrorPermissionDenied
-	}
-
+func (s *GaCloudServer) GetFileByPath(ctx context.Context, path string) (*model.File, func(), error) {
 	resp, err := s.es.Get(s.esIndex, utils.EncodeElasticSearchID(path)).Do(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -184,19 +202,6 @@ func (s *GaCloudServer) GetFileReader(ctx context.Context, operator *model.User,
 	return provider.Get(ctx, f.Sum)
 }
 
-func (s *GaCloudServer) WriteFile(ctx context.Context, operator *model.User, f *model.File, reader io.Reader) error {
-	if !s.FsPermCheck(ctx, operator, &f.Path) {
-		return utils.ErrorPermissionDenied
-	}
-
-	provider, err := s.GetProvider(f.ProviderId)
-	if err != nil {
-		return err
-	}
-
-	return provider.Put(ctx, f.Sum, reader)
-}
-
 func (s *GaCloudServer) FileExists(ctx context.Context, operator *model.User, path string) (bool, error) {
 	if !s.FsPermCheck(ctx, operator, &path) {
 		return false, utils.ErrorPermissionDenied
@@ -217,6 +222,7 @@ func (s *GaCloudServer) ListFiles(ctx context.Context, operator *model.User, dir
 // with no permission check
 func (s *GaCloudServer) listFiles(ctx context.Context, dir string) ([]*model.File, func(), error) {
 	dir = utils.CleanDirPath(dir)
+	size := "size"
 
 	searchReq := search.Request{
 		Size: &listSearchSize,
@@ -250,9 +256,24 @@ func (s *GaCloudServer) listFiles(ctx context.Context, dir string) ([]*model.Fil
 					Field: &fp,
 				},
 				Aggregations: map[string]types.Aggregations{
-					"any_document": {
+					"total_size": {
+						Sum: &types.SumAggregation{
+							Field: &size,
+						},
+					},
+					"latest_document": {
 						TopHits: &types.TopHitsAggregation{
-							Size: &listSearchAggSize,
+							Size:    &listSearchAggSize,
+							Source_: []string{"updated_at", "mime", "sum"},
+							Sort: []types.SortCombinations{
+								types.SortOptions{
+									SortOptions: map[string]types.FieldSort{
+										"updated_at": {
+											Order: &sortorder.Desc,
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -283,13 +304,15 @@ func (s *GaCloudServer) listFiles(ctx context.Context, dir string) ([]*model.Fil
 	files := make([]*model.File, len(buckets))
 	for i, bucket := range buckets {
 		files[i] = filePool.Get().(*model.File)
-		hit := bucket.Aggregations["any_document"].(*types.TopHitsAggregate).Hits.Hits[0]
-		err = json.Unmarshal(hit.Source_, files[i])
+		totalSize := bucket.Aggregations["total_size"].(*types.SumAggregate).Value
+		files[i].Size = uint64(*totalSize)
+		latestDoc := bucket.Aggregations["latest_document"].(*types.TopHitsAggregate).Hits.Hits[0]
+		err = json.Unmarshal(latestDoc.Source_, files[i])
 		if err != nil {
 			return nil, func() {}, err
 		}
 
-		files[i].Fp = bucket.Key.(string)
+		files[i].Path = bucket.Key.(string)
 	}
 
 	cleanup := func() {
@@ -299,4 +322,11 @@ func (s *GaCloudServer) listFiles(ctx context.Context, dir string) ([]*model.Fil
 	}
 
 	return files, cleanup, nil
+}
+
+func (s *GaCloudServer) ClearIndex(ctx context.Context) error {
+	_, err := s.es.DeleteByQuery(s.esIndex).Query(&types.Query{
+		MatchAll: &types.MatchAllQuery{},
+	}).Do(ctx)
+	return err
 }

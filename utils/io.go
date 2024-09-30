@@ -18,3 +18,22 @@ func ToWriteCloser(writer io.Writer) io.WriteCloser {
 	}
 	return nil
 }
+
+type readerWithCloser struct {
+	io.Reader
+	Closer func() error
+}
+
+func (r *readerWithCloser) Close() error {
+	if r.Closer == nil {
+		return nil
+	}
+	return r.Closer()
+}
+
+func WithCloser(reader io.Reader, closer func() error) io.ReadCloser {
+	return &readerWithCloser{
+		Reader: reader,
+		Closer: closer,
+	}
+}

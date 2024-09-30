@@ -1,15 +1,7 @@
 import { IconMoon, IconSun } from "@douyinfe/semi-icons";
 import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
-
-const switchMode = (darkMode: boolean) => {
-  const body = document.body;
-  if (darkMode) {
-    body.setAttribute("theme-mode", "dark");
-  } else {
-    body.removeAttribute("theme-mode");
-  }
-};
+import switchDarkMode from "../pages/loaders/darkmode.ts";
 
 const systemPrefersDark = window.matchMedia(
   "(prefers-color-scheme: dark)",
@@ -19,14 +11,12 @@ const colorModeIcon = (darkMode: boolean) => {
   return darkMode ? <IconSun size="large" /> : <IconMoon size="large" />;
 };
 
-switchMode(true);
-
 const DarkModeButton = () => {
   const [darkMode, setDarkMode] = useState(systemPrefersDark);
 
   const handleClick = () => {
     setDarkMode(!darkMode);
-    switchMode(!darkMode);
+    switchDarkMode(!darkMode);
   };
 
   return (

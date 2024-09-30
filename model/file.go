@@ -4,6 +4,7 @@ import (
 	mime2 "mime"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/wintbiit/gacloud/utils"
@@ -17,12 +18,17 @@ const (
 )
 
 type File struct {
-	Path       string `json:"path"`
-	Size       uint64 `json:"size"`
-	Mime       string `json:"mime"`
-	Sum        string `json:"sum"`
-	ProviderId uint   `json:"provider_id"`
-	Fp         string `json:"fp,omitempty"`
+	Path       string    `json:"path"`
+	Size       uint64    `json:"size"`
+	Mime       string    `json:"mime"`
+	Sum        string    `json:"sum"`
+	ProviderId uint      `json:"provider_id"`
+	CreatedAt  time.Time `json:"created_at,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at,omitempty"`
+}
+
+func (f *File) Name() string {
+	return path.Base(f.Path)
 }
 
 var FileTypeMapping = &types.TypeMapping{
@@ -32,6 +38,8 @@ var FileTypeMapping = &types.TypeMapping{
 		"size":        types.NewIntegerNumberProperty(),
 		"mime":        types.NewTextProperty(),
 		"provider_id": types.NewIntegerNumberProperty(),
+		"created_at":  types.NewDateProperty(),
+		"updated_at":  types.NewDateProperty(),
 	},
 }
 
@@ -46,38 +54,31 @@ type Chrootable interface {
 	HomeDir() string
 }
 
-func NewFile(owner Chrootable, dir, name string, size uint64, sum string, providerId uint) (*File, error) {
-	if !path.IsAbs(dir) {
-		dir = path.Join(owner.HomeDir(), dir)
+func NewFile(owner Chrootable, p string, size uint64, sum string, providerId uint) (*File, error) {
+	if !path.IsAbs(p) {
+		p = path.Join(owner.HomeDir(), p)
 	}
 
-	if !strings.HasPrefix(dir, UserScopeDir) {
+	if !strings.HasPrefix(p, UserScopeDir) && !strings.HasPrefix(p, GroupScopeDir) && !strings.HasPrefix(p, ShareScopeDir) {
 		return nil, utils.ErrorInvalidPath
 	}
 
-	if !strings.HasPrefix(dir, GroupScopeDir) {
-		return nil, utils.ErrorInvalidPath
-	}
-
-	if !strings.HasPrefix(dir, ShareScopeDir) {
-		return nil, utils.ErrorInvalidPath
-	}
-
-	return newFile(dir, name, size, sum, providerId), nil
+	return newFile(p, size, sum, providerId), nil
 }
 
-func newFile(dir, name string, size uint64, sum string, providerId uint) *File {
-	ext := path.Ext(name)
-	mime, _, err := mime2.ParseMediaType(ext)
-	if err != nil {
+func newFile(p string, size uint64, sum string, providerId uint) *File {
+	ext := path.Ext(p)
+	mime := mime2.TypeByExtension(ext)
+	if mime == "" {
 		mime = "application/octet-stream"
 	}
 
 	return &File{
-		Path:       path.Join(dir, name),
+		Path:       p,
 		Size:       size,
 		Mime:       mime,
 		Sum:        sum,
 		ProviderId: providerId,
+		CreatedAt:  time.Now(),
 	}
 }

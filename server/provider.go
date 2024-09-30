@@ -20,14 +20,14 @@ func (s *GaCloudServer) RefreshFileProviders(ctx context.Context) error {
 	return nil
 }
 
-// GetDefaultProvider returns default file provider for user
+// GetDefaultProviderID returns default file provider id for user
 // priority: user provider > group provider > default provider(0)
-func (s *GaCloudServer) GetDefaultProvider(ctx context.Context, u *model.User) (fs.FileProvider, error) {
+func (s *GaCloudServer) GetDefaultProviderID(ctx context.Context, u *model.User) uint {
 	// if defined user provider, return it
 	var uf model.UserFileProvider
 	err := s.db.WithContext(ctx).Where("user_id = ?", u.ID).First(&uf).Error
 	if err == nil {
-		return s.GetProvider(uf.FileProviderID)
+		return uf.FileProviderID
 	}
 
 	// if defined group provider, return it
@@ -36,11 +36,11 @@ func (s *GaCloudServer) GetDefaultProvider(ctx context.Context, u *model.User) (
 		Joins("JOIN user_groups ON user_groups.group_id = group_file_providers.group_id").
 		Where("user_groups.user_id = ?", u.ID).First(&gf).Error
 	if err == nil {
-		return s.GetProvider(gf.FileProviderID)
+		return gf.FileProviderID
 	}
 
 	// return default provider
-	return s.GetProvider(DefaultFileProviderId)
+	return DefaultFileProviderId
 }
 
 func (s *GaCloudServer) GetProvider(providerId uint) (fs.FileProvider, error) {

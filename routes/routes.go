@@ -2,6 +2,8 @@ package routes
 
 import (
 	"github.com/kataras/iris/v12"
+	"github.com/kataras/iris/v12/middleware/jwt"
+	"github.com/wintbiit/gacloud/model"
 	"github.com/wintbiit/gacloud/server"
 )
 
@@ -34,6 +36,7 @@ func RegisterRoutes(app iris.Party) {
 		}
 		if hook.auth {
 			party.Use(verifyMiddleware)
+			party.Use(userMiddleware)
 		}
 		hook.cb(party)
 	}
@@ -69,4 +72,13 @@ func verifyMiddleware(ctx iris.Context) {
 	}
 
 	verify(ctx)
+}
+
+func userMiddleware(ctx iris.Context) {
+	user := jwt.Get(ctx).(*model.UserClaims).ToUser()
+	ctx.Values().Set("user_id", user.ID)
+	ctx.Values().Set("user_name", user.Name)
+	ctx.Values().Set("user", user)
+
+	ctx.Next()
 }

@@ -1,3 +1,6 @@
+import switchDarkMode from "./pages/loaders/darkmode.ts";
+switchDarkMode(true)
+
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "reset-css/reset.css";
@@ -15,6 +18,7 @@ const Maintenance = lazy(() => import("./pages/setup/Maintenance.tsx"));
 const StandaloneLayout = lazy(() => import("./pages/StandaloneLayout.tsx"));
 import { logout } from "./api";
 import setupLoader from "./pages/loaders/setupLoader.ts";
+import dashboardLoader from "./pages/loaders/dashboardLoader.ts";
 
 const router = createBrowserRouter([
   {
@@ -25,6 +29,7 @@ const router = createBrowserRouter([
       {
         path: "/",
         element: <Dashboard />,
+        loader: dashboardLoader
       },
     ],
   },
