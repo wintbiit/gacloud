@@ -1,10 +1,10 @@
-import {DashboardFile} from "../pages/loaders/dashboardLoader.ts";
-import {Card} from "@douyinfe/semi-ui";
 
-function ListFile({file} : {file: DashboardFile}) {
+import {Card} from "@douyinfe/semi-ui";
+import {File} from "../api/files";
+
+function ListFile({file} : {file: File}) {
     return (
-        <Card title={file.name} style={{width: "300px"}}>
-            {file.isDir ? "文件夹" : "文件"}
+        <Card title={file.path} style={{width: "300px"}}>
         </Card>
     );
 }

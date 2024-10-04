@@ -1,7 +1,7 @@
 import { IconMoon, IconSun } from "@douyinfe/semi-icons";
 import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
-import switchDarkMode from "../pages/loaders/darkmode.ts";
+import switchDarkMode from "../loaders/darkmode.ts";
 
 const systemPrefersDark = window.matchMedia(
   "(prefers-color-scheme: dark)",

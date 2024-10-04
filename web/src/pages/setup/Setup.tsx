@@ -1,12 +1,12 @@
-import { Avatar, Skeleton, Space, Steps, Typography } from "@douyinfe/semi-ui";
 import DatabaseSetup from "./DataBaseSetup.tsx";
 import StorageSetup from "./StorageSetup.tsx";
 import AdminSetup from "./AdminSetup.tsx";
 import Finish from "./Finish.tsx";
-import { IconBolt, IconSave, IconServer, IconUser } from "@douyinfe/semi-icons";
-import { Suspense, useState } from "react";
-import { getSetupStatus, StorageProviderConfig } from "../../api/setup.ts";
 import ElasticsearchSetup from "./ElasticsearchSetup.tsx";
+import { Avatar, Skeleton, Space, Steps, Typography } from "@douyinfe/semi-ui";
+import { IconBolt, IconSave, IconServer, IconUser } from "@douyinfe/semi-icons";
+import { Suspense, useState} from "react";
+import { getSetupStatus, StorageProviderConfig } from "../../api/setup.ts";
 import { Await, useAsyncValue, useLoaderData } from "react-router-dom";
 
 const gaCloudIconUrl = "/gacloud.svg";

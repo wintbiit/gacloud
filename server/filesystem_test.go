@@ -21,9 +21,18 @@ func TestFileSystem(t *testing.T) {
 		Name: "admin",
 	}
 
-	testFiles := make([]*model.File, 5)
+	testFiles := make([]*model.File, 10)
 	for i := 0; i < 5; i++ {
 		name := utils.RandStr(10)
+		sum := utils.Md5SumBytes([]byte(name))
+		testFiles[i], err = model.NewFile(testUser, name, 100, sum, DefaultFileProviderId)
+		if err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+	}
+
+	for i := 5; i < 10; i++ {
+		name := utils.RandStr(10) + "/" + utils.RandStr(10)
 		sum := utils.Md5SumBytes([]byte(name))
 		testFiles[i], err = model.NewFile(testUser, name, 100, sum, DefaultFileProviderId)
 		if err != nil {

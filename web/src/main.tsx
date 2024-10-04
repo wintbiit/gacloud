@@ -1,24 +1,27 @@
-import switchDarkMode from "./pages/loaders/darkmode.ts";
+import switchDarkMode from "./loaders/darkmode.ts";
 switchDarkMode(true)
 
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "reset-css/reset.css";
 import "./styles/index.css";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import {createBrowserRouter, redirect, RouterProvider} from "react-router-dom";
 import { Provider } from "react-redux";
 import store from "./stores";
 import Loading from "./pages/Loading.tsx";
 const DashboardLayout = lazy(() => import("./pages/DashboardLayout.tsx"));
-const Dashboard = lazy(() => import("./pages/dashboard/Dashboard.tsx"));
+const Files = lazy(() => import("./pages/files/Files.tsx"));
 const Error = lazy(() => import("./pages/error/Error.tsx"));
 const Login = lazy(() => import("./pages/login/Login.tsx"));
 const Setup = lazy(() => import("./pages/setup/Setup.tsx"));
 const Maintenance = lazy(() => import("./pages/setup/Maintenance.tsx"));
 const StandaloneLayout = lazy(() => import("./pages/StandaloneLayout.tsx"));
+const Likes = lazy(() => import("./pages/likes/Likes.tsx"));
+const Shares = lazy(() => import("./pages/shares/Shares.tsx"));
+const GroupFolders = lazy(() => import("./pages/groups/GroupFolders.tsx"));
 import { logout } from "./api";
-import setupLoader from "./pages/loaders/setupLoader.ts";
-import dashboardLoader from "./pages/loaders/dashboardLoader.ts";
+import setupLoader from "./loaders/setupLoader.ts";
+import filesLoader from "./loaders/filesLoader.ts";
 
 const router = createBrowserRouter([
   {
@@ -28,8 +31,24 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <Dashboard />,
-        loader: dashboardLoader
+        loader: () => redirect("/files/")
+      },
+      {
+        path: "/likes",
+        element: <Likes />,
+      },
+      {
+        path: "/shares",
+        element: <Shares />
+      },
+      {
+        path: "/groups",
+        element: <GroupFolders />
+      },
+      {
+        path: "/files/*",
+        element: <Files />,
+        loader: filesLoader
       },
     ],
   },

@@ -6,7 +6,8 @@ export interface File {
     mime: string
     sum: string
     providerId: string
-    fd: string
+    createdAt: string
+    updatedAt: string
 }
 
 export type ListFilesResponse = File[]

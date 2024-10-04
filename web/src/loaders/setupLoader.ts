@@ -2,7 +2,7 @@ import {
   getSetupStatus,
   getStorageProviders,
   StorageProviderConfig,
-} from "../../api/setup.ts";
+} from "../api/setup.ts";
 import { defer, redirect } from "react-router-dom";
 
 const setupLoader = async () => {
