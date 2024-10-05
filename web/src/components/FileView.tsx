@@ -1,5 +1,3 @@
-function FileView() {
+function FileView() {}
 
-}
-
-export default FileView
+export default FileView;

@@ -1,11 +1,15 @@
 import switchDarkMode from "./loaders/darkmode.ts";
-switchDarkMode(true)
+switchDarkMode(true);
 
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "reset-css/reset.css";
 import "./styles/index.css";
-import {createBrowserRouter, redirect, RouterProvider} from "react-router-dom";
+import {
+  createBrowserRouter,
+  redirect,
+  RouterProvider,
+} from "react-router-dom";
 import { Provider } from "react-redux";
 import store from "./stores";
 import Loading from "./pages/Loading.tsx";
@@ -31,7 +35,7 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        loader: () => redirect("/files/")
+        loader: () => redirect("/files/"),
       },
       {
         path: "/likes",
@@ -39,16 +43,16 @@ const router = createBrowserRouter([
       },
       {
         path: "/shares",
-        element: <Shares />
+        element: <Shares />,
       },
       {
         path: "/groups",
-        element: <GroupFolders />
+        element: <GroupFolders />,
       },
       {
         path: "/files/*",
         element: <Files />,
-        loader: filesLoader
+        loader: filesLoader,
       },
     ],
   },

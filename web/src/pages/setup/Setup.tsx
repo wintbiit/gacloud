@@ -5,7 +5,7 @@ import Finish from "./Finish.tsx";
 import ElasticsearchSetup from "./ElasticsearchSetup.tsx";
 import { Avatar, Skeleton, Space, Steps, Typography } from "@douyinfe/semi-ui";
 import { IconBolt, IconSave, IconServer, IconUser } from "@douyinfe/semi-icons";
-import { Suspense, useState} from "react";
+import { Suspense, useState } from "react";
 import { getSetupStatus, StorageProviderConfig } from "../../api/setup.ts";
 import { Await, useAsyncValue, useLoaderData } from "react-router-dom";
 
